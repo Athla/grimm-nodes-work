@@ -157,7 +157,3 @@ WebSocket:
     - Lazy loading and priority queues.
 - Should adapters run discovery in parallel or sequentially?
     - We shall see.
-
----
-
-*Build it your way. This is just a map, not a prescription.*

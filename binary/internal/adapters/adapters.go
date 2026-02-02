@@ -1,6 +1,9 @@
 package adapters
 
-import "github.com/google/uuid"
+import (
+	"binary/internal/graph/edges"
+	"binary/internal/graph/nodes"
+)
 
 type ConnectionConfig map[string]any
 type HealthMetrics map[string]any
@@ -11,29 +14,11 @@ type Adapter interface {
 	Connect(config ConnectionConfig) error
 
 	// Recursive method using BFS  to find and map everything
-	Discover() ([]Node, []Edge, error)
+	Discover() ([]nodes.Node, []edges.Edge, error)
 
 	// Just a abstract method of how to get basic health metrics
 	Health() (HealthMetrics, error)
 
 	// Entrypoint for connection closing upon shutting down the service
 	Close() error
-}
-
-// Core struct, the nodes of the service
-type Node struct {
-	Id       uuid.UUID
-	Type     string
-	Name     string
-	Parent   string
-	Metadata map[string]any
-}
-
-// Connection and boundary data
-type Edge struct {
-	Id     string
-	Source uuid.UUID
-	Target uuid.UUID
-	Type   string
-	Label  string
 }
