@@ -336,8 +336,8 @@ See the [LICENSE](LICENSE) file for details. AGPL requires that modified version
 
 ## Support
 
-- **Issues**: [github.com/yourusername/graph-info/issues](https://github.com/yourusername/graph-info/issues)
-- **Discussions**: [github.com/yourusername/graph-info/discussions](https://github.com/yourusername/graph-info/discussions)
+- **Issues**: [github.com/Athla/grimm-nodes-work/issues](https://github.com/athla/grimm-nodes-work/issues)
+- **Discussions**: [github.com/Athla/grimm-nodes-work/discussions](https://github.com/athla/grimm-nodes-work/discussions)
 
 ---
 
