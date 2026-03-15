@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Panel } from '../ui';
 import { useNodeFromGraph } from '../../api';
 import { calculatePriority, countConnections } from '../../utils';
@@ -9,6 +9,7 @@ interface NodeInspectorProps {
   nodeId: string | null;
   onClose: () => void;
   graph?: Graph;
+  onNodeSelect?: (nodeId: string) => void;
 }
 
 const healthLabels: Record<HealthStatus, string> = {
@@ -25,8 +26,17 @@ const priorityLabels: Record<PriorityTier, string> = {
   low: 'Low',
 };
 
-export default function NodeInspector({ nodeId, onClose, graph }: NodeInspectorProps) {
+export default function NodeInspector({ nodeId, onClose, graph, onNodeSelect }: NodeInspectorProps) {
   const node = useNodeFromGraph(nodeId);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyId = useCallback(() => {
+    if (!node) return;
+    navigator.clipboard.writeText(node.id).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }, [node]);
 
   const priority = useMemo(() => {
     if (!node || !graph?.edges) return 'low' as PriorityTier;
@@ -35,18 +45,18 @@ export default function NodeInspector({ nodeId, onClose, graph }: NodeInspectorP
   }, [node, graph]);
 
   const connections = useMemo(() => {
-    if (!nodeId || !graph?.nodes || !graph?.edges) return { incoming: [] as string[], outgoing: [] as string[] };
+    if (!nodeId || !graph?.nodes || !graph?.edges) return { incoming: [] as { id: string; name: string }[], outgoing: [] as { id: string; name: string }[] };
 
     const nodeMap = new Map(graph.nodes.map(n => [n.id, n.name]));
-    const incoming: string[] = [];
-    const outgoing: string[] = [];
+    const incoming: { id: string; name: string }[] = [];
+    const outgoing: { id: string; name: string }[] = [];
 
     graph.edges.forEach(edge => {
       if (edge.target === nodeId) {
-        incoming.push(nodeMap.get(edge.source) || edge.source);
+        incoming.push({ id: edge.source, name: nodeMap.get(edge.source) || edge.source });
       }
       if (edge.source === nodeId) {
-        outgoing.push(nodeMap.get(edge.target) || edge.target);
+        outgoing.push({ id: edge.target, name: nodeMap.get(edge.target) || edge.target });
       }
     });
 
@@ -54,9 +64,9 @@ export default function NodeInspector({ nodeId, onClose, graph }: NodeInspectorP
   }, [nodeId, graph]);
 
   return (
-    <Panel isOpen={!!nodeId} onClose={onClose}>
+    <Panel isOpen={!!nodeId} onClose={onClose} ariaLabel="Node inspector">
       {node && (
-        <div className={styles.inspector}>
+        <div key={nodeId} className={styles.inspector}>
           <header className={styles.header}>
             <div className={`${styles.accentBar} ${styles[`accent_${priority}`]}`} />
 
@@ -93,7 +103,27 @@ export default function NodeInspector({ nodeId, onClose, graph }: NodeInspectorP
             <section className={styles.statsGrid}>
               <div className={styles.stat}>
                 <span className={styles.statLabel}>ID</span>
-                <span className={styles.statValue}>{node.id}</span>
+                <span className={styles.statValueRow}>
+                  <span className={styles.statValue}>{node.id}</span>
+                  <button
+                    className={styles.copyBtn}
+                    onClick={handleCopyId}
+                    aria-label="Copy node ID"
+                    title="Copy ID"
+                  >
+                    {copied ? (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                      </svg>
+                    )}
+                    {copied && <span className={styles.copiedFeedback}>Copied!</span>}
+                  </button>
+                </span>
               </div>
               {node.parent && (
                 <div className={styles.stat}>
@@ -142,8 +172,19 @@ export default function NodeInspector({ nodeId, onClose, graph }: NodeInspectorP
                 <div className={styles.connectionGroup}>
                   <span className={styles.connectionLabel}>Incoming</span>
                   <ul className={styles.connectionList}>
-                    {connections.incoming.map((name, i) => (
-                      <li key={i} className={styles.connectionItem}>{name}</li>
+                    {connections.incoming.map((conn) => (
+                      <li key={conn.id} className={styles.connectionItem}>
+                        <button
+                          className={styles.connectionLink}
+                          onClick={() => onNodeSelect?.(conn.id)}
+                          aria-label={`Navigate to ${conn.name}`}
+                        >
+                          {conn.name}
+                          <svg className={styles.connectionArrow} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </li>
                     ))}
                   </ul>
                 </div>
@@ -152,8 +193,19 @@ export default function NodeInspector({ nodeId, onClose, graph }: NodeInspectorP
                 <div className={styles.connectionGroup}>
                   <span className={styles.connectionLabel}>Outgoing</span>
                   <ul className={styles.connectionList}>
-                    {connections.outgoing.map((name, i) => (
-                      <li key={i} className={styles.connectionItem}>{name}</li>
+                    {connections.outgoing.map((conn) => (
+                      <li key={conn.id} className={styles.connectionItem}>
+                        <button
+                          className={styles.connectionLink}
+                          onClick={() => onNodeSelect?.(conn.id)}
+                          aria-label={`Navigate to ${conn.name}`}
+                        >
+                          {conn.name}
+                          <svg className={styles.connectionArrow} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M5 12h14M12 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      </li>
                     ))}
                   </ul>
                 </div>

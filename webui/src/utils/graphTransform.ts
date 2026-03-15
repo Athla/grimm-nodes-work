@@ -32,7 +32,12 @@ export function detectHierarchy(graph: Graph): Hierarchy {
   const nodeMap = new Map(graph.nodes.map(n => [n.id, n]));
   const roots: HierarchyNode[] = [];
 
+  const treeVisited = new Set<string>();
   function buildTree(node: GraphNode): HierarchyNode {
+    if (treeVisited.has(node.id)) {
+      return { node, children: [] };
+    }
+    treeVisited.add(node.id);
     const children = childrenMap.get(node.id) || [];
     return {
       node,
@@ -52,9 +57,9 @@ export function detectHierarchy(graph: Graph): Hierarchy {
 
 // Calculate hierarchical layout positions
 export function calculateHierarchicalLayout(graph: Graph): Map<string, { x: number; y: number }> {
-  const NODE_W = 180;
+  const NODE_W = 220;
   const NODE_H = 64;
-  const GAP_X = 40;
+  const GAP_X = 60;
   const GAP_Y = 80;
 
   const nodeIds = new Set(graph.nodes.map(n => n.id));
@@ -76,11 +81,15 @@ export function calculateHierarchicalLayout(graph: Graph): Map<string, { x: numb
   // Assign ranks using longest-path from roots (nodes with no incoming edges)
   const rank = new Map<string, number>();
 
+  const visiting = new Set<string>();
   function assignRank(id: string): number {
     if (rank.has(id)) return rank.get(id)!;
+    if (visiting.has(id)) return 0; // Break cycle
+    visiting.add(id);
     const pars = parents.get(id)!;
     const r = pars.length === 0 ? 0 : Math.max(...pars.map(assignRank)) + 1;
     rank.set(id, r);
+    visiting.delete(id);
     return r;
   }
 

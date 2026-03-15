@@ -35,6 +35,7 @@ export default function SearchOverlay({
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [displayLimit, setDisplayLimit] = useState(20);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -48,19 +49,36 @@ export default function SearchOverlay({
     return () => clearTimeout(timer);
   }, [query]);
 
-  const results = useMemo(() => {
-    if (!graph?.nodes || !debouncedQuery.trim()) return [];
+  const { results, totalMatchCount } = useMemo(() => {
+    if (!graph?.nodes || !debouncedQuery.trim()) {
+      return { results: [] as GraphNode[], totalMatchCount: 0 };
+    }
 
     const lowerQuery = debouncedQuery.toLowerCase();
-    return graph.nodes
-      .filter(
-        (node) =>
-          node.name.toLowerCase().includes(lowerQuery) ||
-          node.type.toLowerCase().includes(lowerQuery) ||
-          node.id.toLowerCase().includes(lowerQuery)
-      )
-      .slice(0, 10);
-  }, [graph, debouncedQuery]);
+
+    const scored = graph.nodes
+      .map(node => {
+        let score = 0;
+        const lowerName = node.name.toLowerCase();
+        const lowerType = node.type.toLowerCase();
+        const lowerId = node.id.toLowerCase();
+
+        if (lowerName === lowerQuery) score = 100;
+        else if (lowerName.startsWith(lowerQuery)) score = 80;
+        else if (lowerName.includes(lowerQuery)) score = 60;
+        else if (lowerType.includes(lowerQuery)) score = 40;
+        else if (lowerId.includes(lowerQuery)) score = 20;
+
+        return { node, score };
+      })
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    return {
+      results: scored.slice(0, displayLimit).map(item => item.node),
+      totalMatchCount: scored.length,
+    };
+  }, [graph, debouncedQuery, displayLimit]);
 
   // Focus input when opening
   useEffect(() => {
@@ -75,10 +93,11 @@ export default function SearchOverlay({
     }
   }, [isOpen]);
 
-  // Reset selection when results change
+  // Reset selection and display limit when query changes
   useEffect(() => {
     setSelectedIndex(0);
-  }, [results]);
+    setDisplayLimit(20);
+  }, [debouncedQuery]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -139,16 +158,31 @@ export default function SearchOverlay({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
+            role="combobox"
+            aria-controls="search-results-list"
+            autoComplete="off"
+            name="search"
             aria-label="Search nodes"
             aria-activedescendant={
               results[selectedIndex] ? `result-${results[selectedIndex].id}` : undefined
             }
           />
+          {query && (
+            <button
+              className={styles.clearBtn}
+              onClick={() => { setQuery(''); inputRef.current?.focus(); }}
+              aria-label="Clear search"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          )}
           <kbd className={styles.hint}>esc</kbd>
         </div>
 
         {debouncedQuery && (
-          <ul ref={listRef} className={styles.results} role="listbox">
+          <ul ref={listRef} className={styles.results} id="search-results-list" role="listbox">
             {results.length > 0 ? (
               results.map((node, index) => (
                 <li
@@ -175,6 +209,18 @@ export default function SearchOverlay({
               <li className={styles.empty}>No nodes found</li>
             )}
           </ul>
+        )}
+
+        {debouncedQuery && totalMatchCount > displayLimit && (
+          <div className={styles.truncationHint}>
+            Showing {displayLimit} of {totalMatchCount} results
+            <button
+              className={styles.showMoreBtn}
+              onClick={() => setDisplayLimit(prev => prev + 20)}
+            >
+              Show more
+            </button>
+          </div>
         )}
 
         {!debouncedQuery && graph?.nodes && (

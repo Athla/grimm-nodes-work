@@ -18,7 +18,7 @@ export function useGraph() {
       return response.data;
     },
     staleTime: 30_000,
-    retry: false,
+    retry: 3,
     refetchOnWindowFocus: false,
   });
 }

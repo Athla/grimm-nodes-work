@@ -117,8 +117,12 @@ func (a *adapter) Health() (adapters.HealthMetrics, error) {
 	}
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		var body map[string]any
-		json.NewDecoder(resp.Body).Decode(&body)
-		body["status"] = "healthy"
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil || body == nil {
+			body = make(map[string]any)
+		}
+		if _, exists := body["status"]; !exists {
+			body["status"] = "healthy"
+		}
 		return body, nil
 	}
 

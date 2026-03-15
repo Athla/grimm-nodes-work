@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"binary/internal/adapters"
-	"binary/internal/database"
 	"binary/internal/graph"
 	"binary/internal/graph/edges"
 	"binary/internal/graph/health"
@@ -30,6 +29,7 @@ func (m *mockRegistry) Get(string) (adapters.Adapter, bool) { return nil, false 
 func (m *mockRegistry) Names() []string                     { return nil }
 func (m *mockRegistry) DiscoverAll() (*graph.Graph, error)  { return m.graph, m.discErr }
 func (m *mockRegistry) HealthAll() []health.HealthMetrics   { return m.health }
+func (m *mockRegistry) InvalidateCache()                    {}
 func (m *mockRegistry) CloseAll() error                     { return nil }
 
 func testGraph() *graph.Graph {
@@ -43,16 +43,6 @@ func testGraph() *graph.Graph {
 		},
 	}
 }
-
-// mockDB implements database.Service for testing.
-type mockDB struct {
-	health map[string]string
-}
-
-var _ database.Service = (*mockDB)(nil)
-
-func (m *mockDB) Health() map[string]string { return m.health }
-func (m *mockDB) Close() error              { return nil }
 
 func newTestServer(reg adapters.Registry) *Server {
 	return &Server{registry: reg}
@@ -250,13 +240,7 @@ func TestGraphHandler_Error(t *testing.T) {
 }
 
 func TestHealthHandler(t *testing.T) {
-	s := &Server{
-		registry: &mockRegistry{},
-		db: &mockDB{health: map[string]string{
-			"status":  "up",
-			"message": "It's healthy",
-		}},
-	}
+	s := newTestServer(&mockRegistry{})
 	srv := httptest.NewServer(http.HandlerFunc(s.healthHandler))
 	defer srv.Close()
 
@@ -274,7 +258,7 @@ func TestHealthHandler(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		t.Fatalf("decode error: %v", err)
 	}
-	if body["status"] != "up" {
-		t.Errorf("expected status 'up', got %q", body["status"])
+	if body["status"] != "ok" {
+		t.Errorf("expected status 'ok', got %q", body["status"])
 	}
 }

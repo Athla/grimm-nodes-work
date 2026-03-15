@@ -45,12 +45,12 @@ export function calculateForceDirectedLayout(
       'link',
       forceLink<ForceNode, ForceLink>(links)
         .id(d => d.id)
-        .distance(120)
+        .distance(180)
         .strength(0.5)
     )
-    .force('charge', forceManyBody().strength(-300))
+    .force('charge', forceManyBody().strength(-400))
     .force('center', forceCenter(width / 2, height / 2))
-    .force('collide', forceCollide().radius(120).strength(0.7))
+    .force('collide', forceCollide().radius(150).strength(0.7))
     .stop();
 
   // Run simulation for 300 iterations to stabilize

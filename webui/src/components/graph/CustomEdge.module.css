@@ -1,14 +1,12 @@
 .edgeGroup {
+  opacity: 1;
   transition: opacity var(--transition-normal);
 }
 
 .edge {
-  stroke: var(--border-default);
+  stroke: var(--edge-stroke);
   stroke-width: var(--edge-width);
   fill: none;
-  transition:
-    stroke var(--transition-normal),
-    stroke-width var(--transition-fast);
 }
 
 .active {
@@ -36,8 +34,8 @@
 /* Edge labels */
 
 .labelBg {
-  fill: var(--bg-secondary);
-  stroke: var(--border-subtle);
+  fill: var(--bg-elevated);
+  stroke: var(--border-default);
   stroke-width: 1;
   transition: fill var(--transition-fast), stroke var(--transition-fast);
 }
@@ -49,15 +47,18 @@
 
 .labelText {
   font-family: var(--font-mono);
-  font-size: var(--text-2xs);
-  fill: var(--text-muted);
+  font-size: var(--text-xs);
+  fill: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
 .edgeGroup:hover .edge {
-  stroke: var(--text-muted);
+  stroke: var(--edge-stroke-hover);
   stroke-width: var(--edge-width-active);
+  transition:
+    stroke var(--transition-normal),
+    stroke-width var(--transition-fast);
 }
 
 .edgeGroup:hover .labelBg {

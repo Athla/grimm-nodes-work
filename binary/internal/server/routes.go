@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -48,17 +49,8 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
-	jsonResp, err := json.Marshal(s.db.Health())
-	if err != nil {
-		log.Printf("error handling JSON marshal. Err: %v", err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(jsonResp); err != nil {
-		log.Printf("healthHandler: write error: %v", err)
-	}
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (s *Server) graphHandler(w http.ResponseWriter, r *http.Request) {
@@ -144,11 +136,40 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	socketCtx := socket.CloseRead(ctx)
 
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	var prevNodeKey string
+
 	for {
 		// Get the current graph to map adapter health to actual node IDs
 		g, err := s.registry.DiscoverAll()
 		if err != nil {
 			log.Printf("websocket: discover error: %v", err)
+		}
+
+		// Detect graph topology changes (nodes added/removed)
+		if g != nil {
+			ids := make([]string, 0, len(g.Nodes))
+			for _, node := range g.Nodes {
+				ids = append(ids, node.Id)
+			}
+			sort.Strings(ids)
+			currentKey := strings.Join(ids, ",")
+
+			if prevNodeKey != "" && currentKey != prevNodeKey {
+				msg := map[string]any{
+					"type":    "graph_update",
+					"payload": map[string]any{},
+				}
+				data, jsonErr := json.Marshal(msg)
+				if jsonErr == nil {
+					if err := socket.Write(socketCtx, websocket.MessageText, data); err != nil {
+						return
+					}
+				}
+			}
+			prevNodeKey = currentKey
 		}
 
 		metrics := s.registry.HealthAll()
@@ -188,7 +209,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-socketCtx.Done():
 			return
-		case <-time.After(5 * time.Second):
+		case <-ticker.C:
 		}
 	}
 }

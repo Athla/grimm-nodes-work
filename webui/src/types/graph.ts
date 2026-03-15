@@ -15,7 +15,9 @@ export type NodeType =
   | 'auth'
   | 'postgres'
   | 'mongodb'
-  | 's3';
+  | 's3'
+  | 'redis'
+  | 'http';
 
 // Priority tiers for visual hierarchy
 export type PriorityTier = 'critical' | 'high' | 'medium' | 'low';

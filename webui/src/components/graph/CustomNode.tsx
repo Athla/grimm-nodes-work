@@ -13,12 +13,12 @@ export type CustomNodeData = Record<string, unknown> & {
   isSource?: boolean;
   isTarget?: boolean;
   isPinned?: boolean;
+  justSaved?: boolean;
 };
 
 type CustomNodeType = Node<CustomNodeData>;
 
-const NodeIcon = ({ type }: { type: NodeType }) => {
-  const icons: Record<NodeType, React.ReactElement> = {
+const NODE_ICONS: Record<NodeType, React.ReactElement> = {
     database: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <ellipse cx="12" cy="6" rx="8" ry="3" />
@@ -133,15 +133,53 @@ const NodeIcon = ({ type }: { type: NodeType }) => {
         <path d="M10 15h4" />
       </svg>
     ),
-  };
+    redis: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <ellipse cx="12" cy="6" rx="8" ry="3" />
+        <path d="M4 6v4c0 1.657 3.582 3 8 3s8-1.343 8-3V6" />
+        <path d="M4 10v4c0 1.657 3.582 3 8 3s8-1.343 8-3v-4" />
+        <path d="M4 14v4c0 1.657 3.582 3 8 3s8-1.343 8-3v-4" />
+        <circle cx="12" cy="10" r="1" fill="currentColor" />
+      </svg>
+    ),
+    http: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20" />
+        <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10A15.3 15.3 0 0112 2z" />
+      </svg>
+    ),
+};
 
-  return icons[type] || icons.service;
+const TYPE_CATEGORY: Record<NodeType, string> = {
+  database: 'data',
+  postgres: 'data',
+  mongodb: 'data',
+  redis: 'data',
+  table: 'data',
+  collection: 'data',
+  bucket: 'storage',
+  s3: 'storage',
+  storage: 'storage',
+  service: 'service',
+  api: 'service',
+  http: 'service',
+  gateway: 'gateway',
+  queue: 'gateway',
+  cache: 'infra',
+  payment: 'infra',
+  auth: 'infra',
+};
+
+const NodeIcon = ({ type }: { type: NodeType }) => {
+  return NODE_ICONS[type] || NODE_ICONS.service;
 };
 
 function CustomNode({ data, selected }: NodeProps<CustomNodeType>) {
-  const { name, type, health, priority, isConnected, isPinned } = data;
+  const { name, type, health, priority, isConnected, isPinned, justSaved } = data;
   const showGlow = isConnected && !selected;
   const showPriorityBorder = priority === 'critical' || priority === 'high';
+  const category = TYPE_CATEGORY[type] || 'service';
 
   return (
     <div
@@ -150,7 +188,9 @@ function CustomNode({ data, selected }: NodeProps<CustomNodeType>) {
         ${selected ? styles.selected : ''}
         ${showGlow ? styles.glowing : ''}
         ${showPriorityBorder ? styles[`priority_${priority}`] : ''}
+        ${justSaved ? styles.pinSaved : ''}
       `}
+      style={{ '--type-color': `var(--type-${category})` } as React.CSSProperties}
     >
       <Handle type="target" position={Position.Top} className={styles.handle} id="top" />
       <Handle type="source" position={Position.Bottom} className={styles.handle} id="bottom" />

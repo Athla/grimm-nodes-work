@@ -1,9 +1,9 @@
-import { useState, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { GraphCanvas } from './graph';
 import { NodeInspector, SearchOverlay, EdgeInspector } from './panels';
 import HeaderBar, { type Filters, type LayoutMode } from './HeaderBar';
-import { ErrorBoundary } from './ui';
+import { ErrorBoundary, EmptyState } from './ui';
 import { useWebSocket, useAppShortcuts } from '../hooks';
 import { useGraph as useGraphData } from '../api';
 import { MOCK_GRAPH } from '../data';
@@ -13,14 +13,23 @@ import styles from './Layout.module.css';
 export default function Layout() {
   const { nodeId: urlNodeId } = useParams<{ nodeId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(urlNodeId ?? null);
   const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [filters, setFilters] = useState<Filters>({ types: [], health: [] });
+  const [filters, setFilters] = useState<Filters>(() => {
+    const typesParam = searchParams.get('types');
+    const healthParam = searchParams.get('health');
+    return {
+      types: typesParam ? typesParam.split(',').filter(Boolean) as Filters['types'] : [],
+      health: healthParam ? healthParam.split(',').filter(Boolean) as Filters['health'] : [],
+    };
+  });
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(
     () => (localStorage.getItem('graph-layout-mode') as LayoutMode) || 'hierarchical'
   );
+  const [layoutResetKey, setLayoutResetKey] = useState(0);
 
   // Persist layout mode to localStorage
   const handleLayoutChange = useCallback((mode: LayoutMode) => {
@@ -28,11 +37,31 @@ export default function Layout() {
     localStorage.setItem('graph-layout-mode', mode);
   }, []);
 
-  const { data: apiGraph, isLoading, error } = useGraphData();
+  const handleResetPositions = useCallback(() => {
+    setLayoutResetKey(k => k + 1);
+  }, []);
+
+  const handleFilterChange = useCallback((newFilters: Filters) => {
+    setFilters(newFilters);
+    const params = new URLSearchParams(searchParams);
+    if (newFilters.types.length > 0) {
+      params.set('types', newFilters.types.join(','));
+    } else {
+      params.delete('types');
+    }
+    if (newFilters.health.length > 0) {
+      params.set('health', newFilters.health.join(','));
+    } else {
+      params.delete('health');
+    }
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const { data: apiGraph, isLoading, error, refetch } = useGraphData();
   const isMockData = !apiGraph?.nodes;
   const graph: Graph = isMockData ? MOCK_GRAPH : apiGraph;
 
-  useWebSocket();
+  const { status: wsStatus } = useWebSocket();
 
   useAppShortcuts({
     onSearch: useCallback(() => setSearchOpen(true), []),
@@ -41,11 +70,14 @@ export default function Layout() {
         setSearchOpen(false);
       } else if (selectedEdge) {
         setSelectedEdge(null);
+        const params = new URLSearchParams(searchParams);
+        params.delete('edge');
+        setSearchParams(params, { replace: true });
       } else if (selectedNodeId) {
         setSelectedNodeId(null);
         navigate('/', { replace: true });
       }
-    }, [searchOpen, selectedEdge, selectedNodeId, navigate]),
+    }, [searchOpen, selectedEdge, selectedNodeId, navigate, searchParams, setSearchParams]),
   });
 
   const handleNodeSelect = useCallback((nodeId: string | null) => {
@@ -68,8 +100,20 @@ export default function Layout() {
   const handleEdgeClick = useCallback((edge: GraphEdge) => {
     setSelectedEdge(edge);
     setSelectedNodeId(null);
-    navigate('/', { replace: true });
-  }, [navigate]);
+    const params = new URLSearchParams(searchParams);
+    params.set('edge', edge.id);
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Restore edge selection from URL on mount
+  useEffect(() => {
+    const edgeParam = searchParams.get('edge');
+    if (edgeParam && graph?.edges && !selectedEdge) {
+      const edge = graph.edges.find(e => e.id === edgeParam);
+      if (edge) setSelectedEdge(edge);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph?.edges]);
 
   // Filter graph for the canvas while keeping unfiltered graph for NodeInspector
   const filteredGraph = useMemo((): Graph | undefined => {
@@ -90,15 +134,26 @@ export default function Layout() {
     return { nodes: filteredNodes, edges: filteredEdges };
   }, [graph, filters]);
 
+  const hasActiveFilters = filters.types.length > 0 || filters.health.length > 0;
+  const isFilteredEmpty = hasActiveFilters && filteredGraph?.nodes?.length === 0 && (graph?.nodes?.length ?? 0) > 0;
+  const activeFilterCount = filters.types.length + filters.health.length;
+
+  const handleClearFilters = useCallback(() => {
+    handleFilterChange({ types: [], health: [] });
+  }, [handleFilterChange]);
+
   return (
     <div className={styles.layout}>
       <HeaderBar
         graph={graph}
+        filteredGraph={filteredGraph}
         onSearchOpen={() => setSearchOpen(true)}
         filters={filters}
-        onFilterChange={setFilters}
+        onFilterChange={handleFilterChange}
         layoutMode={layoutMode}
         onLayoutChange={handleLayoutChange}
+        onResetPositions={handleResetPositions}
+        wsStatus={wsStatus}
       />
 
       {isMockData && !isLoading && (
@@ -112,15 +167,25 @@ export default function Layout() {
 
       <div className={styles.graphArea}>
         <ErrorBoundary>
-          <GraphCanvas
-            graph={filteredGraph}
-            selectedNodeId={selectedNodeId}
-            onNodeSelect={handleNodeSelect}
-            onEdgeClick={handleEdgeClick}
-            layoutMode={layoutMode}
-            isLoading={!apiGraph && isLoading}
-            error={error instanceof Error ? error : error ? new Error(String(error)) : null}
-          />
+          {isFilteredEmpty ? (
+            <EmptyState
+              reason="filtered"
+              filterCount={activeFilterCount}
+              onClearFilters={handleClearFilters}
+            />
+          ) : (
+            <GraphCanvas
+              graph={filteredGraph}
+              selectedNodeId={selectedNodeId}
+              onNodeSelect={handleNodeSelect}
+              onEdgeClick={handleEdgeClick}
+              layoutMode={layoutMode}
+              resetKey={layoutResetKey}
+              isLoading={!apiGraph && isLoading}
+              error={error instanceof Error ? error : error ? new Error(String(error)) : null}
+              onRetry={() => refetch()}
+            />
+          )}
         </ErrorBoundary>
       </div>
 
@@ -128,12 +193,19 @@ export default function Layout() {
         nodeId={selectedNodeId}
         onClose={() => handleNodeSelect(null)}
         graph={graph}
+        onNodeSelect={handleNodeSelect}
       />
 
       <EdgeInspector
         edge={selectedEdge}
-        onClose={() => setSelectedEdge(null)}
+        onClose={() => {
+          setSelectedEdge(null);
+          const params = new URLSearchParams(searchParams);
+          params.delete('edge');
+          setSearchParams(params, { replace: true });
+        }}
         graph={graph}
+        onNodeSelect={handleNodeSelect}
       />
 
       <SearchOverlay

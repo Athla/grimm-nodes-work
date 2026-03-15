@@ -16,11 +16,12 @@ interface LayoutStorage {
 const STORAGE_KEY = 'graph-layout-positions';
 const MAX_LAYOUTS = 50;
 
-// Calculate stable hash from node IDs
-function calculateGraphHash(graph: Graph | undefined): string {
+// Calculate stable hash from node IDs and layout mode
+function calculateGraphHash(graph: Graph | undefined, layoutMode?: string): string {
   if (!graph?.nodes) return '';
   const sortedIds = graph.nodes.map(n => n.id).sort();
-  return JSON.stringify(sortedIds);
+  const base = JSON.stringify(sortedIds);
+  return layoutMode ? `${base}:${layoutMode}` : base;
 }
 
 // Load positions from localStorage
@@ -62,19 +63,19 @@ function savePositions(graphHash: string, positions: Map<string, Position>) {
   }
 }
 
-export function useLayoutPersistence(graph: Graph | undefined) {
+export function useLayoutPersistence(graph: Graph | undefined, layoutMode?: string) {
   const [graphHash, setGraphHash] = useState<string>('');
   const [savedPositions, setSavedPositions] = useState<Map<string, Position>>(new Map());
 
-  // Calculate hash and load positions when graph changes
+  // Calculate hash and load positions when graph or layout mode changes
   useEffect(() => {
-    const hash = calculateGraphHash(graph);
+    const hash = calculateGraphHash(graph, layoutMode);
     if (hash && hash !== graphHash) {
       setGraphHash(hash);
       const positions = loadPositions(hash);
       setSavedPositions(positions);
     }
-  }, [graph, graphHash]);
+  }, [graph, graphHash, layoutMode]);
 
   // Save a single position (debounced externally)
   const savePosition = useCallback((nodeId: string, position: { x: number; y: number }, isPinned: boolean = false) => {

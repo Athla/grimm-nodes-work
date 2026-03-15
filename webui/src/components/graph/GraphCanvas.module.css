@@ -2,7 +2,9 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: var(--bg-void);
+  background:
+    radial-gradient(ellipse at 50% 50%, transparent 0%, rgba(0, 0, 0, 0.4) 100%),
+    var(--bg-void);
   overflow: hidden;
 }
 
@@ -66,7 +68,29 @@
   word-break: break-word;
 }
 
+.retryBtn {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-6);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.retryBtn:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-strong);
+}
+
 /* React Flow overrides */
+
+.canvas :global(svg) {
+  max-width: none;
+}
 
 .canvas :global(.react-flow__pane) {
   cursor: grab;
@@ -81,8 +105,13 @@
 }
 
 .canvas :global(.react-flow__edge-path) {
-  stroke: var(--border-default);
+  stroke: var(--edge-stroke);
   stroke-width: var(--edge-width);
+}
+
+/* Layout transition crossfade */
+.transitioning {
+  animation: fade-through 500ms var(--ease-smooth) forwards;
 }
 
 .canvas :global(.react-flow__edge.selected .react-flow__edge-path) {
@@ -132,4 +161,51 @@
   fill: currentColor !important;
   width: 16px !important;
   height: 16px !important;
+}
+
+/* MiniMap */
+
+.minimap {
+  background: var(--bg-primary) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-md) !important;
+  overflow: hidden;
+}
+
+/* Skeleton loading */
+
+.skeleton {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-void);
+  overflow: hidden;
+}
+
+.skeletonNode {
+  position: absolute;
+  width: 160px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--bg-elevated) 25%,
+    var(--bg-surface) 50%,
+    var(--bg-elevated) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Mobile */
+@media (max-width: 639px) {
+  .minimap {
+    display: none !important;
+  }
 }

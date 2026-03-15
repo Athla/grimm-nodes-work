@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef, useEffect } from 'react';
 import type { Graph, NodeType, HealthStatus } from '../types';
 import styles from './HeaderBar.module.css';
 
@@ -9,34 +9,74 @@ export interface Filters {
 
 export type LayoutMode = 'hierarchical' | 'force';
 
+type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+
 interface HeaderBarProps {
   graph?: Graph;
+  filteredGraph?: Graph;
   onSearchOpen: () => void;
   filters: Filters;
   onFilterChange: (filters: Filters) => void;
   layoutMode: LayoutMode;
   onLayoutChange: (mode: LayoutMode) => void;
+  onResetPositions: () => void;
+  wsStatus?: ConnectionStatus;
 }
 
 const nodeTypes: NodeType[] = [
-  'database', 'table', 'collection', 'bucket', 'storage',
-  'service', 'api', 'gateway', 'queue', 'cache', 'payment', 'auth',
+  'database', 'postgres', 'mongodb', 'redis', 'table', 'collection',
+  'bucket', 's3', 'storage', 'service', 'api', 'http', 'gateway',
+  'queue', 'cache', 'payment', 'auth',
 ];
 
 const healthStatuses: HealthStatus[] = ['healthy', 'degraded', 'unhealthy'];
 
-export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange, layoutMode, onLayoutChange }: HeaderBarProps) {
+const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+
+const wsStatusLabels: Record<ConnectionStatus, string> = {
+  connected: 'Live connection active',
+  connecting: 'Connecting...',
+  disconnected: 'Disconnected',
+  error: 'Connection error',
+};
+
+export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters, onFilterChange, layoutMode, onLayoutChange, onResetPositions, wsStatus }: HeaderBarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const mobileFilterRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    if (!dropdownOpen && !mobileFiltersOpen) return;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownOpen && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+      if (mobileFiltersOpen && mobileFilterRef.current && !mobileFilterRef.current.contains(event.target as Node)) {
+        setMobileFiltersOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen, mobileFiltersOpen]);
+
+  const hasActiveFilters = filters.types.length > 0 || filters.health.length > 0;
+  const activeFilterCount = filters.types.length + filters.health.length;
+
   const healthCounts = useMemo(() => {
-    if (!graph?.nodes) return { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0, total: 0 };
+    const sourceGraph = hasActiveFilters && filteredGraph ? filteredGraph : graph;
+    if (!sourceGraph?.nodes) return { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0, total: 0 };
 
     const counts = { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0 };
-    graph.nodes.forEach(node => {
+    sourceGraph.nodes.forEach(node => {
       counts[node.health]++;
     });
 
-    return { ...counts, total: graph.nodes.length };
-  }, [graph]);
+    return { ...counts, total: sourceGraph.nodes.length };
+  }, [graph, filteredGraph, hasActiveFilters]);
 
   // Only show type chips that exist in the current graph
   const activeTypes = useMemo(() => {
@@ -61,21 +101,33 @@ export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange
 
   return (
     <header className={styles.header}>
-      <span className={styles.appName}>graph-info</span>
+      <span className={styles.appName}>
+        graph-info
+        {wsStatus && (
+          <span
+            className={`${styles.wsIndicator} ${styles[`ws_${wsStatus}`]}`}
+            title={wsStatusLabels[wsStatus]}
+            aria-label={wsStatusLabels[wsStatus]}
+            role="status"
+          />
+        )}
+      </span>
 
-      <button className={styles.searchTrigger} onClick={onSearchOpen}>
+      <button className={styles.searchTrigger} onClick={onSearchOpen} aria-label="Search nodes">
         <svg className={styles.searchIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
           <path d="M21 21l-4.35-4.35" />
         </svg>
         <span className={styles.searchLabel}>Search nodes...</span>
-        <kbd className={styles.searchKbd}>Cmd+K</kbd>
+        <kbd className={styles.searchKbd}>{isMac ? 'Cmd\u00A0+\u00A0K' : 'Ctrl\u00A0+\u00A0K'}</kbd>
       </button>
 
-      <div className={styles.layoutToggle}>
+      <div className={styles.layoutToggle} ref={dropdownRef}>
         <button
           className={styles.layoutButton}
           onClick={() => setDropdownOpen(!dropdownOpen)}
+          aria-haspopup="listbox"
+          aria-expanded={dropdownOpen}
         >
           Layout: {layoutMode === 'hierarchical' ? 'Hierarchical' : 'Force-Directed'}
           <svg className={styles.chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -83,8 +135,10 @@ export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange
           </svg>
         </button>
         {dropdownOpen && (
-          <div className={styles.dropdown}>
+          <div className={styles.dropdown} role="listbox">
             <button
+              role="option"
+              aria-selected={layoutMode === 'hierarchical'}
               className={`${styles.dropdownItem} ${layoutMode === 'hierarchical' ? styles.dropdownItemActive : ''}`}
               onClick={() => {
                 onLayoutChange('hierarchical');
@@ -94,6 +148,8 @@ export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange
               Hierarchical (Top-Down)
             </button>
             <button
+              role="option"
+              aria-selected={layoutMode === 'force'}
               className={`${styles.dropdownItem} ${layoutMode === 'force' ? styles.dropdownItemActive : ''}`}
               onClick={() => {
                 onLayoutChange('force');
@@ -106,6 +162,60 @@ export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange
         )}
       </div>
 
+      <button
+        className={styles.resetButton}
+        onClick={onResetPositions}
+        title="Reset all node positions"
+        aria-label="Reset positions"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={styles.resetIcon}>
+          <path d="M1 4v6h6" />
+          <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+        </svg>
+        <span className={styles.resetLabel}>Reset</span>
+      </button>
+
+      {activeTypes.length > 0 && (
+        <div className={styles.mobileFilterWrapper} ref={mobileFilterRef}>
+          <button
+            className={styles.mobileFilterBtn}
+            onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+            aria-label="Toggle filters"
+            aria-expanded={mobileFiltersOpen}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={styles.mobileFilterIcon}>
+              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+            </svg>
+            {activeFilterCount > 0 ? `${activeFilterCount} filter${activeFilterCount > 1 ? 's' : ''}` : 'Filter'}
+          </button>
+          {mobileFiltersOpen && (
+            <div className={styles.mobileFilterDropdown}>
+              {activeTypes.map(type => (
+                <button
+                  key={type}
+                  className={`${styles.filterChip} ${filters.types.includes(type) ? styles.chipActive : ''}`}
+                  onClick={() => toggleType(type)}
+                  aria-pressed={filters.types.includes(type)}
+                >
+                  {type}
+                </button>
+              ))}
+              {healthStatuses.map(status => (
+                <button
+                  key={status}
+                  className={`${styles.filterChip} ${styles[`chip_${status}`]} ${filters.health.includes(status) ? styles.chipActive : ''}`}
+                  onClick={() => toggleHealth(status)}
+                  aria-pressed={filters.health.includes(status)}
+                >
+                  <span className={`${styles.chipDot} ${styles[`chipDot_${status}`]}`} />
+                  {status}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {activeTypes.length > 0 && (
         <div className={styles.filterGroup}>
           {activeTypes.map(type => (
@@ -113,6 +223,7 @@ export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange
               key={type}
               className={`${styles.filterChip} ${filters.types.includes(type) ? styles.chipActive : ''}`}
               onClick={() => toggleType(type)}
+              aria-pressed={filters.types.includes(type)}
             >
               {type}
             </button>
@@ -122,6 +233,7 @@ export default function HeaderBar({ graph, onSearchOpen, filters, onFilterChange
               key={status}
               className={`${styles.filterChip} ${styles[`chip_${status}`]} ${filters.health.includes(status) ? styles.chipActive : ''}`}
               onClick={() => toggleHealth(status)}
+              aria-pressed={filters.health.includes(status)}
             >
               <span className={`${styles.chipDot} ${styles[`chipDot_${status}`]}`} />
               {status}

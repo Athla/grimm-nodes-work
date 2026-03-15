@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
   Controls,
+  MiniMap,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -38,8 +39,10 @@ interface GraphCanvasProps {
   onNodeSelect: (nodeId: string | null) => void;
   onEdgeClick?: (edge: GraphEdge) => void;
   layoutMode: LayoutMode;
+  resetKey?: number;
   isLoading?: boolean;
   error?: Error | null;
+  onRetry?: () => void;
 }
 
 function getConnectedNodeIds(nodeId: string, edges: GraphEdge[]) {
@@ -55,17 +58,16 @@ function getConnectedNodeIds(nodeId: string, edges: GraphEdge[]) {
   return { sources, targets, all };
 }
 
-function transformGraphToFlow(
+function computeLayout(
   graph: Graph,
   layoutMode: LayoutMode,
   savedPositions: Map<string, { x: number; y: number; isPinned?: boolean }>,
-  selectedNodeId: string | null,
   viewportSize: { width: number; height: number }
 ): {
   nodes: Node<CustomNodeData>[];
   edges: Edge<CustomEdgeData>[];
 } {
-  // Calculate base layout positions
+  // Calculate base layout positions (expensive)
   const basePositions = layoutMode === 'hierarchical'
     ? calculateHierarchicalLayout(graph)
     : calculateForceDirectedLayout(graph, viewportSize);
@@ -78,27 +80,11 @@ function transformGraphToFlow(
     }
   });
 
-  const connectedInfo = selectedNodeId
-    ? getConnectedNodeIds(selectedNodeId, graph.edges)
-    : null;
-
   const nodes: Node<CustomNodeData>[] = graph.nodes.map(node => {
     const connectionCount = countConnections(node.id, graph.edges);
     const priority = calculatePriority(node, connectionCount);
     const position = finalPositions.get(node.id) || { x: 0, y: 0 };
     const savedPos = savedPositions.get(node.id);
-
-    let isConnected: boolean | undefined;
-    let isSource = false;
-    let isTarget = false;
-
-    if (selectedNodeId && node.id !== selectedNodeId) {
-      if (connectedInfo) {
-        isConnected = connectedInfo.all.has(node.id);
-        isSource = connectedInfo.sources.has(node.id);
-        isTarget = connectedInfo.targets.has(node.id);
-      }
-    }
 
     return {
       id: node.id,
@@ -110,36 +96,64 @@ function transformGraphToFlow(
         health: node.health,
         priority,
         connectionCount,
-        isConnected,
-        isSource,
-        isTarget,
+        isConnected: undefined,
+        isSource: false,
+        isTarget: false,
         isPinned: savedPos?.isPinned || false,
       },
     };
   });
 
-  const edges: Edge<CustomEdgeData>[] = graph.edges.map(edge => {
-    let isActive: boolean | undefined;
+  const edges: Edge<CustomEdgeData>[] = graph.edges.map(edge => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    type: 'custom',
+    data: {
+      label: edge.label,
+      isActive: undefined,
+    },
+  }));
 
-    if (selectedNodeId) {
-      if (edge.source === selectedNodeId || edge.target === selectedNodeId) {
-        isActive = true;
-      } else {
-        isActive = false;
-      }
-    }
+  return { nodes, edges };
+}
+
+function applyHighlighting(
+  layoutNodes: Node<CustomNodeData>[],
+  layoutEdges: Edge<CustomEdgeData>[],
+  selectedNodeId: string | null,
+  graphEdges: GraphEdge[]
+): {
+  nodes: Node<CustomNodeData>[];
+  edges: Edge<CustomEdgeData>[];
+} {
+  if (!selectedNodeId) return { nodes: layoutNodes, edges: layoutEdges };
+
+  const connectedInfo = getConnectedNodeIds(selectedNodeId, graphEdges);
+
+  const nodes = layoutNodes.map(node => {
+    if (node.id === selectedNodeId) return node;
 
     return {
-      id: edge.id,
-      source: edge.source,
-      target: edge.target,
-      type: 'custom',
+      ...node,
       data: {
-        label: edge.label,
-        isActive,
+        ...node.data,
+        isConnected: connectedInfo.all.has(node.id),
+        isSource: connectedInfo.sources.has(node.id),
+        isTarget: connectedInfo.targets.has(node.id),
       },
     };
   });
+
+  const edges = layoutEdges.map(edge => ({
+    ...edge,
+    data: {
+      ...edge.data,
+      isActive: edge.source === selectedNodeId || edge.target === selectedNodeId
+        ? true
+        : false,
+    },
+  }));
 
   return { nodes, edges };
 }
@@ -150,21 +164,65 @@ function GraphCanvasInner({
   onNodeSelect,
   onEdgeClick,
   layoutMode,
+  resetKey,
   isLoading,
   error,
+  onRetry,
 }: GraphCanvasProps) {
   const { fitView } = useReactFlow();
   const prevNodeCountRef = useRef(0);
-  const { savedPositions, savePosition } = useLayoutPersistence(graph);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const { savedPositions, savePosition, clearLayout } = useLayoutPersistence(graph, layoutMode);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [justSavedNodeId, setJustSavedNodeId] = useState<string | null>(null);
+  const prevLayoutModeRef = useRef(layoutMode);
+  const transitionTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Use a fixed viewport size for force-directed layout
-  const viewportSize = { width: 1200, height: 800 };
+  // Dynamic viewport via ResizeObserver
+  const [viewportSize, setViewportSize] = useState({ width: 1200, height: 800 });
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (entry) {
+        const { width, height } = entry.contentRect;
+        if (width > 0 && height > 0) {
+          setViewportSize({ width, height });
+        }
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
+  // Layout transition animation — subscribe to layoutMode changes via effect
+  useEffect(() => {
+    if (prevLayoutModeRef.current === layoutMode) return;
+    prevLayoutModeRef.current = layoutMode;
+
+    setIsTransitioning(true);
+    clearTimeout(transitionTimerRef.current);
+    transitionTimerRef.current = setTimeout(() => {
+      setIsTransitioning(false);
+      fitView({ padding: 0.15, duration: 500 });
+    }, 100);
+    return () => clearTimeout(transitionTimerRef.current);
+  }, [layoutMode, fitView]);
+
+  // Memo 1: Expensive layout computation — NOT dependent on selectedNodeId
+  const { layoutNodes, layoutEdges } = useMemo(() => {
+    if (!graph?.nodes) return { layoutNodes: [], layoutEdges: [] };
+    const { nodes, edges } = computeLayout(graph, layoutMode, savedPositions, viewportSize);
+    return { layoutNodes: nodes, layoutEdges: edges };
+  }, [graph, layoutMode, savedPositions, viewportSize]);
+
+  // Memo 2: Cheap highlighting — runs on node click, no layout recomputation
   const { flowNodes, flowEdges } = useMemo(() => {
-    if (!graph?.nodes) return { flowNodes: [], flowEdges: [] };
-    const { nodes, edges } = transformGraphToFlow(graph, layoutMode, savedPositions, selectedNodeId, viewportSize);
+    if (layoutNodes.length === 0) return { flowNodes: [], flowEdges: [] };
+    const { nodes, edges } = applyHighlighting(layoutNodes, layoutEdges, selectedNodeId, graph?.edges ?? []);
     return { flowNodes: nodes, flowEdges: edges };
-  }, [graph, layoutMode, savedPositions, selectedNodeId]);
+  }, [layoutNodes, layoutEdges, selectedNodeId, graph?.edges]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(flowNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(flowEdges);
@@ -182,12 +240,25 @@ function GraphCanvasInner({
     }
   }, [graph?.nodes?.length, fitView]);
 
+  // Reset positions when resetKey changes (triggered by "Reset Positions" button)
+  const prevResetKeyRef = useRef(resetKey);
+  useEffect(() => {
+    if (resetKey === undefined || resetKey === prevResetKeyRef.current) return;
+    prevResetKeyRef.current = resetKey;
+    clearLayout();
+    setTimeout(() => fitView({ padding: 0.15, duration: 500 }), 50);
+  }, [resetKey, clearLayout, fitView]);
+
   const nodesWithSelection = useMemo(() => {
     return nodes.map(node => ({
       ...node,
       selected: node.id === selectedNodeId,
+      data: {
+        ...node.data,
+        justSaved: node.id === justSavedNodeId,
+      },
     }));
-  }, [nodes, selectedNodeId]);
+  }, [nodes, selectedNodeId, justSavedNodeId]);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -221,6 +292,8 @@ function GraphCanvasInner({
   const handleNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
       debouncedSavePosition(node.id, node.position);
+      setJustSavedNodeId(node.id);
+      setTimeout(() => setJustSavedNodeId(prev => prev === node.id ? null : prev), 600);
     },
     [debouncedSavePosition]
   );
@@ -237,6 +310,11 @@ function GraphCanvasInner({
           </div>
           <span className={styles.loadingText}>Failed to load graph</span>
           <span className={styles.errorDetail}>{error.message}</span>
+          {onRetry && (
+            <button className={styles.retryBtn} onClick={onRetry}>
+              Try again
+            </button>
+          )}
         </div>
       </div>
     );
@@ -244,11 +322,13 @@ function GraphCanvasInner({
 
   if (isLoading) {
     return (
-      <div className={styles.loading}>
-        <div className={styles.loadingContent}>
-          <div className={styles.spinner} />
-          <span className={styles.loadingText}>Loading graph...</span>
-        </div>
+      <div className={styles.skeleton}>
+        <div className={styles.skeletonNode} style={{ top: '20%', left: '15%' }} />
+        <div className={styles.skeletonNode} style={{ top: '35%', left: '45%' }} />
+        <div className={styles.skeletonNode} style={{ top: '15%', left: '65%' }} />
+        <div className={styles.skeletonNode} style={{ top: '55%', left: '25%' }} />
+        <div className={styles.skeletonNode} style={{ top: '50%', left: '70%' }} />
+        <div className={styles.skeletonNode} style={{ top: '70%', left: '50%' }} />
       </div>
     );
   }
@@ -258,7 +338,7 @@ function GraphCanvasInner({
   }
 
   return (
-    <div className={styles.canvas}>
+    <div ref={canvasRef} className={`${styles.canvas} ${isTransitioning ? styles.transitioning : ''}`}>
       <ReactFlow
         nodes={nodesWithSelection}
         edges={edges}
@@ -279,14 +359,25 @@ function GraphCanvasInner({
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={32}
-          size={1}
-          color="rgba(255, 255, 255, 0.03)"
+          gap={28}
+          size={1.2}
+          color="rgba(255, 255, 255, 0.06)"
         />
         <Controls
           className={styles.controls}
           showInteractive={false}
           position="bottom-right"
+        />
+        <MiniMap
+          className={styles.minimap}
+          nodeColor="#2a2a2a"
+          nodeStrokeColor="rgba(255, 255, 255, 0.15)"
+          nodeBorderRadius={4}
+          maskColor="rgba(0, 0, 0, 0.7)"
+          bgColor="#111111"
+          position="bottom-left"
+          pannable
+          zoomable
         />
       </ReactFlow>
     </div>

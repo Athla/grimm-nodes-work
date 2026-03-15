@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -43,7 +44,11 @@ func gracefulShutdown(apiServer *http.Server, cleanup func(), done chan bool) {
 
 func main() {
 
-	cfg, err := config.Load("conf/config.yaml")
+	configPath := os.Getenv("CONFIG_PATH")
+	if configPath == "" {
+		configPath = "conf/config.yaml"
+	}
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Printf("WARNING: could not load config: %v (starting with zero adapters)", err)
 		cfg = &config.Config{}

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"binary/internal/adapters"
@@ -9,7 +10,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type DockerConfig struct {
+	Enabled      *bool    `yaml:"enabled,omitempty"`      // nil = auto-detect
+	Socket       string   `yaml:"socket,omitempty"`       // default: /var/run/docker.sock
+	Network      string   `yaml:"network,omitempty"`      // limit to specific network
+	IgnoreImages []string `yaml:"ignore_images,omitempty"`
+}
+
 type Config struct {
+	Docker      DockerConfig      `yaml:"docker,omitempty"`
 	Connections []ConnectionEntry `yaml:"connections"`
 }
 
@@ -43,7 +52,41 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("config: failed to parse %s: %w", path, err)
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
+}
+
+func (cfg *Config) Validate() error {
+	for i, conn := range cfg.Connections {
+		if conn.Name == "" {
+			return fmt.Errorf("config: connections[%d]: 'name' is required", i)
+		}
+		if conn.Type == "" {
+			return fmt.Errorf("config: connections[%d] (%s): 'type' is required", i, conn.Name)
+		}
+		switch conn.Type {
+		case "postgres":
+			if conn.DSN == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'dsn' is required for postgres", i, conn.Name)
+			}
+		case "mongodb":
+			if conn.URI == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'uri' is required for mongodb", i, conn.Name)
+			}
+		case "s3", "http":
+			if conn.Endpoint == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'endpoint' is required for %s", i, conn.Name, conn.Type)
+			}
+		case "redis":
+			// Valid type, adapter not yet implemented
+		default:
+			return fmt.Errorf("config: connections[%d] (%s): unknown type %q", i, conn.Name, conn.Type)
+		}
+	}
+	return nil
 }
 
 func (e *ConnectionEntry) ToConnectionConfig() adapters.ConnectionConfig {
@@ -89,6 +132,8 @@ func (e *ConnectionEntry) ToConnectionConfig() adapters.ConnectionConfig {
 			}
 			cfg["depends_on"] = deps
 		}
+	default:
+		log.Printf("WARNING: ToConnectionConfig: unrecognized type %q for %q", e.Type, e.Name)
 	}
 
 	return cfg

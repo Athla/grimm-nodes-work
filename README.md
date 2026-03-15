@@ -1,22 +1,29 @@
+<div align="center">
+
 # graph-info
 
-**Interactive infrastructure visualization tool** — Maps your databases (PostgreSQL, MongoDB) and storage services (S3/MinIO) as an interactive graph with real-time health monitoring.
+**See your infrastructure. Instantly.**
+
+Point graph-info at your stack and get a live, interactive map of every database, table, service, and storage bucket — with real-time health monitoring.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+![graph-info demo](./docs/GraphGo.png)
+
+</div>
 
 ---
 
-## What It Does
+graph-info **auto-discovers** your infrastructure by connecting to the Docker daemon, inspecting running containers, and probing databases and storage services. No manual inventory needed — it builds the graph for you.
 
-**graph-info** automatically discovers and visualizes your infrastructure components as an interactive graph:
-
-- **PostgreSQL**: Discovers databases, tables, and foreign key relationships
-- **MongoDB**: Maps databases and collections
-- **S3/MinIO**: Lists buckets and folder prefixes
-- **Real-time health**: WebSocket-powered live status updates every 5 seconds
-- **Zero configuration**: Just provide connection strings — discovery is automatic
-
-Point it at your infrastructure and instantly see the topology.
+| Capability | Details |
+|---|---|
+| **Auto-discovery** | Detects PostgreSQL, MongoDB, MinIO/S3, Redis, and HTTP services from Docker containers |
+| **PostgreSQL** | Tables, foreign key relationships, schema topology |
+| **MongoDB** | Databases and collections |
+| **S3 / MinIO** | Buckets and top-level prefixes |
+| **HTTP services** | Health endpoints, dependency mapping between services |
+| **Real-time health** | WebSocket-powered live status updates every 5 seconds |
+| **Interactive graph** | Pan, zoom, filter by type/health, search nodes, pin layouts |
 
 ---
 
@@ -153,19 +160,21 @@ connections:
 ### Backend (Go)
 
 ```
-Config (YAML)
-    ↓
-Adapter Registry
-    ├─ PostgreSQL Adapter → Discovers tables + foreign keys
-    ├─ MongoDB Adapter    → Discovers collections
-    └─ S3 Adapter         → Discovers buckets + prefixes
-    ↓
-Graph Model (Nodes + Edges)
-    ↓
-REST API + WebSocket (Real-time health)
+Docker Daemon ──→ Auto-Discovery ──→ Classify containers
+                                         ↓
+Config (YAML) ──→ Adapter Registry ──→ Merge discovered + configured
+                      ├─ PostgreSQL Adapter → Tables + foreign keys
+                      ├─ MongoDB Adapter    → Collections
+                      ├─ S3 Adapter         → Buckets + prefixes
+                      └─ HTTP Adapter       → Service health + dependencies
+                      ↓
+                  Graph Model (Nodes + Edges)
+                      ↓
+                  REST API + WebSocket (Real-time health)
 ```
 
 **Key Components:**
+- **Auto-Discovery**: Inspects Docker containers, classifies images, extracts credentials from env vars, watches Docker events for live topology changes
 - **Adapters**: Implement the `Adapter` interface to discover infrastructure
 - **Registry**: Manages adapters, creates service-level parent nodes, aggregates graph data
 - **Cache**: 30-second TTL with singleflight pattern to prevent thundering herd
@@ -278,7 +287,7 @@ Streams real-time health updates.
        Close() error
    }
    ```
-3. **Register in factory** (`binary/internal/config/factory.go`)
+3. **Register in the adapter registry** (`binary/internal/adapters/registry.go`)
 4. **Add node type** in `binary/internal/graph/nodes/nodes.go`
 5. **Update frontend types** in `webui/src/types/graph.ts`
 6. **Add icon** in `webui/src/components/graph/CustomNode.tsx`
@@ -324,6 +333,8 @@ See the [LICENSE](LICENSE) file for details. AGPL requires that modified version
 
 ## Roadmap
 
+- [x] Docker auto-discovery
+- [x] HTTP service health monitoring
 - [ ] Redis adapter
 - [ ] Kafka adapter
 - [ ] Elasticsearch adapter

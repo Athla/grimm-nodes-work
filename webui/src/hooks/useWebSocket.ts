@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { useUpdateNodeHealth } from '../api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useUpdateNodeHealth, queryKeys } from '../api';
 import type { WebSocketMessage, HealthUpdatePayload } from '../types';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -12,9 +13,11 @@ export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const isDisconnectingRef = useRef(false);
+  const [status, setStatus] = useState<ConnectionStatus>('connecting');
 
   const updateNodeHealth = useUpdateNodeHealth();
+  const queryClient = useQueryClient();
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -29,20 +32,20 @@ export function useWebSocket() {
           }
           case 'node_update':
           case 'graph_update':
-            // These could trigger a refetch instead of direct cache update
-            // For now, we'll handle them if needed
+            queryClient.invalidateQueries({ queryKey: queryKeys.graph });
             break;
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err);
       }
     },
-    [updateNodeHealth]
+    [updateNodeHealth, queryClient]
   );
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+    isDisconnectingRef.current = false;
     setStatus('connecting');
 
     try {
@@ -56,8 +59,15 @@ export function useWebSocket() {
       ws.onmessage = handleMessage;
 
       ws.onclose = () => {
-        setStatus('disconnected');
         wsRef.current = null;
+
+        // If disconnect() was called intentionally, don't reconnect
+        if (isDisconnectingRef.current) {
+          setStatus('disconnected');
+          return;
+        }
+
+        setStatus('disconnected');
 
         // Stop reconnecting after max attempts
         if (reconnectAttemptRef.current >= MAX_RECONNECT_ATTEMPTS) return;
@@ -81,6 +91,7 @@ export function useWebSocket() {
   }, [handleMessage]);
 
   const disconnect = useCallback(() => {
+    isDisconnectingRef.current = true;
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }

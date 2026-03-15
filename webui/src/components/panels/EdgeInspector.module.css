@@ -63,6 +63,21 @@
   font-family: var(--font-mono);
 }
 
+.nodeNameBtn {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--link-color);
+  font-family: var(--font-mono);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.nodeNameBtn:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--link-hover-color);
+}
+
 .arrow {
   width: 20px;
   height: 20px;

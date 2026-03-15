@@ -6,8 +6,11 @@ services:
     ports:
       - "8080:8080"
     volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./conf/config.docker.yaml:/app/conf/config.yaml:ro
       - backend-data:/app/data
+    labels:
+      graphinfo.ignore: "true"
     depends_on:
       postgres:
         condition: service_healthy
@@ -34,6 +37,8 @@ services:
       target: frontend
     ports:
       - "3000:80"
+    labels:
+      graphinfo.ignore: "true"
     depends_on:
       - backend
     networks:
@@ -164,8 +169,44 @@ services:
     networks:
       - graph-info
 
+  # ── Discovery-only backend (no config.yaml) ──────────────────────────
+  # Usage: docker compose --profile discovery up
+  backend-discovery:
+    profiles: ["discovery"]
+    build:
+      context: .
+      target: backend
+    ports:
+      - "8081:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - backend-data:/app/data
+    labels:
+      graphinfo.ignore: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      api-gateway:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      media-service:
+        condition: service_healthy
+    networks:
+      - graph-info
+
   minio-init:
     image: minio/mc:latest
+    labels:
+      graphinfo.ignore: "true"
     depends_on:
       minio:
         condition: service_healthy

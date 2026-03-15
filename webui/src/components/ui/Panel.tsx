@@ -7,6 +7,7 @@ interface PanelProps {
   children: ReactNode;
   position?: 'right' | 'bottom';
   width?: string;
+  ariaLabel?: string;
 }
 
 export default function Panel({
@@ -15,6 +16,7 @@ export default function Panel({
   children,
   position = 'right',
   width = '360px',
+  ariaLabel,
 }: PanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -23,6 +25,8 @@ export default function Panel({
     if (!isOpen) return;
 
     function handleClickOutside(event: MouseEvent) {
+      // Skip close when clicking on a graph node — the node click handler will update panel content
+      if ((event.target as HTMLElement).closest('.react-flow__node')) return;
       if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
         onClose();
       }
@@ -53,6 +57,54 @@ export default function Panel({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  // Focus trapping
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    previousFocusRef.current = document.activeElement as HTMLElement;
+
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+    // Auto-focus first focusable element
+    requestAnimationFrame(() => {
+      const first = panel.querySelector<HTMLElement>(focusableSelector);
+      first?.focus();
+    });
+
+    function handleTabTrap(event: KeyboardEvent) {
+      if (event.key !== 'Tab' || !panel) return;
+
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey) {
+        if (document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    document.addEventListener('keydown', handleTabTrap);
+    return () => {
+      document.removeEventListener('keydown', handleTabTrap);
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -62,6 +114,7 @@ export default function Panel({
       style={{ '--panel-width': width } as React.CSSProperties}
       role="dialog"
       aria-modal="true"
+      aria-label={ariaLabel}
     >
       {children}
     </div>
