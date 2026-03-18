@@ -74,10 +74,8 @@ test-frontend:
 
 ## lint: Run linters and static analysis
 lint:
-	@echo "Running Go vet..."
-	@cd binary && go vet ./...
-	@echo "Running Go fmt check..."
-	@cd binary && test -z "$$(gofmt -l .)" || (echo "Run 'go fmt ./...' to fix formatting" && exit 1)
+	@echo "Running golangci-lint..."
+	@cd binary && golangci-lint run ./...
 	@echo "✓ All checks passed"
 
 ## clean: Remove build artifacts and dependencies

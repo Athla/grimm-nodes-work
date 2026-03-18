@@ -33,7 +33,7 @@ The fastest way to try graph-info is with Docker Compose, which includes Postgre
 
 ```bash
 # Clone and start all services
-git clone https://github.com/yourusername/graph-info.git
+git clone https://github.com/Athla/grimm-nodes-work.git
 cd graph-info
 make docker-up
 
@@ -101,7 +101,7 @@ make install       # Install all dependencies
 make dev          # Run backend + frontend concurrently
 make build        # Build production binaries
 make test         # Run all tests
-make lint         # Run Go vet and fmt checks
+make lint         # Run golangci-lint
 ```
 
 ---
@@ -328,6 +328,23 @@ Users are responsible for ensuring they have proper authorization before connect
 This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
 See the [LICENSE](LICENSE) file for details. AGPL requires that modified versions used over a network must also be open-sourced.
+
+---
+
+## CI/CD & Releases
+
+The project uses GitHub Actions for continuous integration and automated releases.
+
+- **CI** runs on every push/PR to `main` — backend tests, `golangci-lint`, and frontend build
+- **Releases** are triggered by version tags (`v*`) and produce:
+  - Cross-platform binaries (Linux, macOS, Windows) via [GoReleaser](https://goreleaser.com)
+  - Docker images pushed to `ghcr.io/athla/grimm-nodes-work-backend` and `-frontend`
+
+To create a release:
+```bash
+git tag v0.1.0
+git push --tags
+```
 
 ---
 
