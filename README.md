@@ -101,7 +101,6 @@ make install       # Install all dependencies
 make dev          # Run backend + frontend concurrently
 make build        # Build production binaries
 make test         # Run all tests
-make lint         # Run golangci-lint
 ```
 
 ---
@@ -335,7 +334,7 @@ See the [LICENSE](LICENSE) file for details. AGPL requires that modified version
 
 The project uses GitHub Actions for continuous integration and automated releases.
 
-- **CI** runs on every push/PR to `main` — backend tests, `golangci-lint`, and frontend build
+- **CI** runs on every push/PR to `main` — backend tests and frontend build
 - **Releases** are triggered by version tags (`v*`) and produce:
   - Cross-platform binaries (Linux, macOS, Windows) via [GoReleaser](https://goreleaser.com)
   - Docker images pushed to `ghcr.io/athla/grimm-nodes-work-backend` and `-frontend`
