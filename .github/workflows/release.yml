@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  goreleaser:
+    name: Build & Release Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: binary/go.sum
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: backend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-backend:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository }}-backend:latest
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: frontend
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}-frontend:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository }}-frontend:latest

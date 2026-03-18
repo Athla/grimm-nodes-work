@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+    <linearGradient id="edge-grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#818cf8" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="node-green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="node-purple" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glow-soft">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background rounded square -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <g stroke="#334155" stroke-width="0.5" opacity="0.3">
+    <line x1="96" y1="16" x2="96" y2="496"/>
+    <line x1="176" y1="16" x2="176" y2="496"/>
+    <line x1="256" y1="16" x2="256" y2="496"/>
+    <line x1="336" y1="16" x2="336" y2="496"/>
+    <line x1="416" y1="16" x2="416" y2="496"/>
+    <line x1="16" y1="96" x2="496" y2="96"/>
+    <line x1="16" y1="176" x2="496" y2="176"/>
+    <line x1="16" y1="256" x2="496" y2="256"/>
+    <line x1="16" y1="336" x2="496" y2="336"/>
+    <line x1="16" y1="416" x2="496" y2="416"/>
+  </g>
+
+  <!-- Edges (connections between nodes) -->
+  <g stroke="url(#edge-grad)" stroke-width="3" stroke-linecap="round" filter="url(#glow-soft)">
+    <!-- Central hub to surrounding nodes -->
+    <line x1="256" y1="240" x2="148" y2="148"/>
+    <line x1="256" y1="240" x2="380" y2="140"/>
+    <line x1="256" y1="240" x2="130" y2="310"/>
+    <line x1="256" y1="240" x2="370" y2="300"/>
+    <line x1="256" y1="240" x2="200" y2="390"/>
+    <line x1="256" y1="240" x2="340" y2="400"/>
+    <!-- Cross connections -->
+    <line x1="148" y1="148" x2="380" y2="140" stroke-dasharray="8 6" opacity="0.4"/>
+    <line x1="130" y1="310" x2="200" y2="390" stroke-dasharray="8 6" opacity="0.4"/>
+    <line x1="370" y1="300" x2="340" y2="400" stroke-dasharray="8 6" opacity="0.4"/>
+    <line x1="148" y1="148" x2="130" y2="310" stroke-dasharray="8 6" opacity="0.4"/>
+    <line x1="380" y1="140" x2="370" y2="300" stroke-dasharray="8 6" opacity="0.4"/>
+  </g>
+
+  <!-- Central node (largest - the hub) -->
+  <g filter="url(#glow)">
+    <circle cx="256" cy="240" r="36" fill="url(#accent)" opacity="0.15"/>
+    <circle cx="256" cy="240" r="24" fill="url(#accent)"/>
+    <!-- Magnifying glass / discovery icon on center node -->
+    <circle cx="252" cy="236" r="8" stroke="#0f172a" stroke-width="2.5" fill="none"/>
+    <line x1="258" y1="242" x2="264" y2="248" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+  <!-- Database node (top-left) -->
+  <g filter="url(#glow-soft)">
+    <circle cx="148" cy="148" r="24" fill="url(#node-green)" opacity="0.15"/>
+    <circle cx="148" cy="148" r="16" fill="url(#node-green)"/>
+    <!-- DB icon -->
+    <ellipse cx="148" cy="143" rx="7" ry="3" stroke="#0f172a" stroke-width="1.8" fill="none"/>
+    <line x1="141" y1="143" x2="141" y2="153" stroke="#0f172a" stroke-width="1.8"/>
+    <line x1="155" y1="143" x2="155" y2="153" stroke="#0f172a" stroke-width="1.8"/>
+    <ellipse cx="148" cy="153" rx="7" ry="3" stroke="#0f172a" stroke-width="1.8" fill="none"/>
+  </g>
+
+  <!-- Service node (top-right) -->
+  <g filter="url(#glow-soft)">
+    <circle cx="380" cy="140" r="24" fill="url(#accent)" opacity="0.15"/>
+    <circle cx="380" cy="140" r="16" fill="url(#accent)"/>
+    <!-- Container/box icon -->
+    <rect x="372" y="133" width="16" height="14" rx="2" stroke="#0f172a" stroke-width="1.8" fill="none"/>
+    <line x1="372" y1="138" x2="388" y2="138" stroke="#0f172a" stroke-width="1.8"/>
+  </g>
+
+  <!-- Storage node (middle-left) -->
+  <g filter="url(#glow-soft)">
+    <circle cx="130" cy="310" r="20" fill="url(#node-purple)" opacity="0.15"/>
+    <circle cx="130" cy="310" r="14" fill="url(#node-purple)"/>
+    <!-- Bucket icon -->
+    <path d="M123 305 L125 318 C125 320 135 320 135 318 L137 305 C137 303 123 303 123 305Z" stroke="#0f172a" stroke-width="1.6" fill="none"/>
+  </g>
+
+  <!-- Health node (middle-right) -->
+  <g filter="url(#glow-soft)">
+    <circle cx="370" cy="300" r="20" fill="url(#node-green)" opacity="0.15"/>
+    <circle cx="370" cy="300" r="14" fill="url(#node-green)"/>
+    <!-- Heartbeat/pulse icon -->
+    <polyline points="360,300 365,300 368,293 372,307 375,300 380,300" stroke="#0f172a" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Leaf node (bottom-left) -->
+  <g filter="url(#glow-soft)">
+    <circle cx="200" cy="390" r="16" fill="url(#accent)" opacity="0.15"/>
+    <circle cx="200" cy="390" r="11" fill="url(#accent)"/>
+  </g>
+
+  <!-- Leaf node (bottom-right) -->
+  <g filter="url(#glow-soft)">
+    <circle cx="340" cy="400" r="16" fill="url(#node-purple)" opacity="0.15"/>
+    <circle cx="340" cy="400" r="11" fill="url(#node-purple)"/>
+  </g>
+
+  <!-- Animated pulse rings on central node (static for SVG) -->
+  <circle cx="256" cy="240" r="42" stroke="url(#accent)" stroke-width="1" fill="none" opacity="0.2"/>
+  <circle cx="256" cy="240" r="52" stroke="url(#accent)" stroke-width="0.5" fill="none" opacity="0.1"/>
+</svg>
