@@ -33,7 +33,7 @@ The fastest way to try graph-info is with Docker Compose, which includes Postgre
 
 ```bash
 # Clone and start all services
-git clone https://github.com/Athla/grimm-nodes-work.git
+git clone https://github.com/guilherme-grimm/graph-go.git
 cd graph-info
 make docker-up
 
@@ -337,7 +337,7 @@ The project uses GitHub Actions for continuous integration and automated release
 - **CI** runs on every push/PR to `main` — backend tests and frontend build
 - **Releases** are triggered by version tags (`v*`) and produce:
   - Cross-platform binaries (Linux, macOS, Windows) via [GoReleaser](https://goreleaser.com)
-  - Docker images pushed to `ghcr.io/athla/grimm-nodes-work-backend` and `-frontend`
+  - Docker images pushed to `ghcr.io/guilherme-grimm/graph-go-backend` and `-frontend`
 
 To create a release:
 ```bash
@@ -363,8 +363,8 @@ git push --tags
 
 ## Support
 
-- **Issues**: [github.com/Athla/grimm-nodes-work/issues](https://github.com/athla/grimm-nodes-work/issues)
-- **Discussions**: [github.com/Athla/grimm-nodes-work/discussions](https://github.com/athla/grimm-nodes-work/discussions)
+- **Issues**: [github.com/guilherme-grimm/graph-go/issues](https://github.com/guilherme-grimm/graph-go/issues)
+- **Discussions**: [github.com/guilherme-grimm/graph-go/discussions](https://github.com/guilherme-grimm/graph-go/discussions)
 
 ---
 
