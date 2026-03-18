@@ -27,14 +27,55 @@ graph-info **auto-discovers** your infrastructure by connecting to the Docker da
 
 ---
 
-## Quick Start (Docker)
+## Installation
 
-The fastest way to try graph-info is with Docker Compose, which includes PostgreSQL, MongoDB, and MinIO with sample data:
+### Docker (recommended)
+
+Point graph-info at your existing infrastructure — no config file needed. Auto-discovery handles the rest:
 
 ```bash
-# Clone and start all services
+# Backend — mount the Docker socket for auto-discovery
+docker run -d -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  ghcr.io/guilherme-grimm/graph-go-backend:latest
+
+# Frontend
+docker run -d -p 3000:80 \
+  ghcr.io/guilherme-grimm/graph-go-frontend:latest
+```
+
+Open `http://localhost:3000` and your infrastructure graph will appear automatically.
+
+To add connections that aren't in Docker (e.g., remote databases, external S3), mount a config file:
+
+```bash
+docker run -d -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v ./conf/config.yaml:/app/conf/config.yaml \
+  ghcr.io/guilherme-grimm/graph-go-backend:latest
+```
+
+### Pre-built binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/guilherme-grimm/graph-go/releases):
+
+```bash
+# Example: Linux amd64
+curl -sL https://github.com/guilherme-grimm/graph-go/releases/latest/download/graph-info_linux_amd64.tar.gz | tar xz
+./graph-info
+```
+
+The backend starts on `http://localhost:8080`. You'll need to serve the frontend separately (see [Local Development Setup](#local-development-setup)).
+
+---
+
+## Quick Start (Docker Compose demo)
+
+To try graph-info with sample data (PostgreSQL, MongoDB, MinIO, and mock services):
+
+```bash
 git clone https://github.com/guilherme-grimm/graph-go.git
-cd graph-info
+cd graph-go
 make docker-up
 
 # Services will be available at:
@@ -42,8 +83,6 @@ make docker-up
 # - Backend API:   http://localhost:8080
 # - MinIO Console: http://localhost:9001
 ```
-
-The Docker environment includes seed data so you can see the graph immediately.
 
 **To stop:**
 ```bash
