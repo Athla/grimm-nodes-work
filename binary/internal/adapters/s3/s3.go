@@ -15,6 +15,12 @@ import (
 	"binary/internal/graph/nodes"
 )
 
+var _ adapters.Adapter = (*adapter)(nil)
+
+func init() {
+	adapters.RegisterFactory("s3", func() adapters.Adapter { return New() })
+}
+
 type adapter struct {
 	client *s3.Client
 }

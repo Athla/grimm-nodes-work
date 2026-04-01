@@ -1,6 +1,9 @@
 package adapters
 
 import (
+	"fmt"
+	"sync"
+
 	"binary/internal/graph/edges"
 	"binary/internal/graph/nodes"
 )
@@ -8,17 +11,47 @@ import (
 type ConnectionConfig map[string]any
 type HealthMetrics map[string]any
 
-// Contracts that bind the adapters and what they should do
+// Adapter defines the contract that all service adapters must satisfy.
 type Adapter interface {
-	// Simple connection to the service, fetches from the config file
+	// Connect establishes a connection using the provided configuration.
 	Connect(config ConnectionConfig) error
 
-	// Recursive method using BFS  to find and map everything
+	// Discover performs recursive discovery (BFS) returning nodes and edges.
 	Discover() ([]nodes.Node, []edges.Edge, error)
 
-	// Just a abstract method of how to get basic health metrics
+	// Health returns health metrics. By convention, adapters include a "status"
+	// key ("healthy", "degraded", "unhealthy") in the returned map and return
+	// nil error. The error return is reserved for cases where health cannot be
+	// determined at all (e.g., adapter not initialized).
 	Health() (HealthMetrics, error)
 
-	// Entrypoint for connection closing upon shutting down the service
+	// Close releases resources upon shutting down the service.
 	Close() error
+}
+
+// AdapterConstructor is a factory function that creates a new Adapter instance.
+type AdapterConstructor func() Adapter
+
+var (
+	factoryMu sync.RWMutex
+	factories = make(map[string]AdapterConstructor)
+)
+
+// RegisterFactory registers an adapter constructor for the given connection type.
+// Adapter packages call this from init() to self-register.
+func RegisterFactory(connType string, ctor AdapterConstructor) {
+	factoryMu.Lock()
+	defer factoryMu.Unlock()
+	factories[connType] = ctor
+}
+
+// NewAdapter creates a new adapter instance for the given connection type.
+func NewAdapter(connType string) (Adapter, error) {
+	factoryMu.RLock()
+	defer factoryMu.RUnlock()
+	ctor, ok := factories[connType]
+	if !ok {
+		return nil, fmt.Errorf("unknown adapter type %q", connType)
+	}
+	return ctor(), nil
 }

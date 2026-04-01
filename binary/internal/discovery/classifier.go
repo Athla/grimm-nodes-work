@@ -6,11 +6,13 @@ import "strings"
 type ServiceType string
 
 const (
-	TypePostgres ServiceType = "postgres"
-	TypeMongoDB  ServiceType = "mongodb"
-	TypeS3       ServiceType = "s3"
-	TypeRedis    ServiceType = "redis"
-	TypeHTTP     ServiceType = "http"
+	TypePostgres      ServiceType = "postgres"
+	TypeMongoDB       ServiceType = "mongodb"
+	TypeS3            ServiceType = "s3"
+	TypeRedis         ServiceType = "redis"
+	TypeMySQL         ServiceType = "mysql"
+	TypeElasticsearch ServiceType = "elasticsearch"
+	TypeHTTP          ServiceType = "http"
 )
 
 type classificationRule struct {
@@ -44,6 +46,24 @@ var classificationRules = []classificationRule{
 		excludes: []string{"exporter", "commander", "insight"},
 		svcType:  TypeRedis,
 		port:     6379,
+	},
+	{
+		pattern:  "mysql",
+		excludes: []string{"exporter", "proxy", "router", "phpmyadmin"},
+		svcType:  TypeMySQL,
+		port:     3306,
+	},
+	{
+		pattern:  "mariadb",
+		excludes: []string{"exporter"},
+		svcType:  TypeMySQL,
+		port:     3306,
+	},
+	{
+		pattern:  "elasticsearch",
+		excludes: []string{"exporter", "kibana", "curator"},
+		svcType:  TypeElasticsearch,
+		port:     9200,
 	},
 }
 

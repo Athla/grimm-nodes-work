@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"time"
 
@@ -12,6 +13,12 @@ import (
 	"binary/internal/graph/edges"
 	"binary/internal/graph/nodes"
 )
+
+var _ adapters.Adapter = (*adapter)(nil)
+
+func init() {
+	adapters.RegisterFactory("postgres", func() adapters.Adapter { return New() })
+}
 
 type adapter struct {
 	pool   *pgxpool.Pool
@@ -170,8 +177,10 @@ func (a *adapter) Health() (adapters.HealthMetrics, error) {
 	}
 
 	var activeConns int
-	_ = a.pool.QueryRow(ctx,
-		"SELECT count(*) FROM pg_stat_activity WHERE datname = $1", a.dbName).Scan(&activeConns)
+	if err := a.pool.QueryRow(ctx,
+		"SELECT count(*) FROM pg_stat_activity WHERE datname = $1", a.dbName).Scan(&activeConns); err != nil {
+		log.Printf("postgres: failed to query active connections: %v", err)
+	}
 
 	return adapters.HealthMetrics{
 		"status":             "healthy",

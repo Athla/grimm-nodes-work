@@ -93,6 +93,79 @@ func TestExtractCredentials_Redis(t *testing.T) {
 	}
 }
 
+func TestExtractCredentials_MySQL(t *testing.T) {
+	env := []string{
+		"MYSQL_ROOT_PASSWORD=rootpass",
+		"MYSQL_USER=myuser",
+		"MYSQL_DATABASE=mydb",
+	}
+
+	cfg := ExtractCredentials(TypeMySQL, env, "mysql-host", "mysql")
+
+	dsn, ok := cfg["dsn"].(string)
+	if !ok {
+		t.Fatal("expected dsn string in config")
+	}
+	if !strings.Contains(dsn, "myuser:rootpass@tcp(mysql-host:3306)/mydb") {
+		t.Errorf("unexpected DSN: %s", dsn)
+	}
+}
+
+func TestExtractCredentials_MySQLDefaults(t *testing.T) {
+	cfg := ExtractCredentials(TypeMySQL, nil, "mysql-host", "mysql")
+
+	dsn := cfg["dsn"].(string)
+	if !strings.Contains(dsn, "root:@tcp(mysql-host:3306)/") {
+		t.Errorf("expected default user in DSN, got: %s", dsn)
+	}
+}
+
+func TestExtractCredentials_MySQLFallbackPassword(t *testing.T) {
+	env := []string{
+		"MYSQL_PASSWORD=userpass",
+		"MYSQL_DATABASE=mydb",
+	}
+
+	cfg := ExtractCredentials(TypeMySQL, env, "mysql-host", "mysql")
+
+	dsn := cfg["dsn"].(string)
+	if !strings.Contains(dsn, "root:userpass@tcp(mysql-host:3306)/mydb") {
+		t.Errorf("expected MYSQL_PASSWORD fallback, got: %s", dsn)
+	}
+}
+
+func TestExtractCredentials_Elasticsearch(t *testing.T) {
+	env := []string{
+		"ELASTIC_USERNAME=elastic",
+		"ELASTIC_PASSWORD=changeme",
+	}
+
+	cfg := ExtractCredentials(TypeElasticsearch, env, "es-host", "elasticsearch")
+
+	endpoint := cfg["endpoint"].(string)
+	if !strings.Contains(endpoint, "es-host:9200") {
+		t.Errorf("unexpected endpoint: %s", endpoint)
+	}
+	if cfg["username"] != "elastic" {
+		t.Errorf("unexpected username: %v", cfg["username"])
+	}
+	if cfg["password"] != "changeme" {
+		t.Errorf("unexpected password: %v", cfg["password"])
+	}
+}
+
+func TestExtractCredentials_ElasticsearchNoAuth(t *testing.T) {
+	cfg := ExtractCredentials(TypeElasticsearch, nil, "es-host", "elasticsearch")
+
+	endpoint := cfg["endpoint"].(string)
+	if !strings.Contains(endpoint, "es-host:9200") {
+		t.Errorf("unexpected endpoint: %s", endpoint)
+	}
+	if _, ok := cfg["username"]; ok {
+		t.Error("expected no username when no password is set")
+	}
+}
+
 func TestExtractCredentials_HTTP(t *testing.T) {
 	env := []string{"PORT=3000"}
 	cfg := ExtractCredentials(TypeHTTP, env, "myapp", "my-service")

@@ -10,12 +10,17 @@ import (
 	"time"
 
 	"binary/internal/adapters"
-	httpAdapter "binary/internal/adapters/http"
-	"binary/internal/adapters/mongodb"
-	"binary/internal/adapters/postgres"
-	"binary/internal/adapters/s3"
 	"binary/internal/config"
 	"binary/internal/discovery"
+
+	// Self-registering adapters
+	_ "binary/internal/adapters/elasticsearch"
+	_ "binary/internal/adapters/http"
+	_ "binary/internal/adapters/mongodb"
+	_ "binary/internal/adapters/mysql"
+	_ "binary/internal/adapters/postgres"
+	_ "binary/internal/adapters/redis"
+	_ "binary/internal/adapters/s3"
 )
 
 type Server struct {
@@ -97,7 +102,7 @@ func NewServer(cfg *config.Config) (*http.Server, func()) {
 
 	// Register all services
 	for _, svc := range services {
-		adapter, err := adapterFactory(string(svc.Type))
+		adapter, err := adapters.NewAdapter(string(svc.Type))
 		if err != nil {
 			log.Printf("WARNING: %v (skipping %q)", err, svc.Name)
 			continue
@@ -165,19 +170,3 @@ func shouldEnableDocker(cfg *config.Config) bool {
 	return err == nil
 }
 
-func adapterFactory(connType string) (adapters.Adapter, error) {
-	switch connType {
-	case "postgres":
-		return postgres.New(), nil
-	case "mongodb":
-		return mongodb.New(), nil
-	case "s3":
-		return s3.New(), nil
-	case "http":
-		return httpAdapter.New(), nil
-	case "redis":
-		return nil, fmt.Errorf("redis adapter not yet implemented")
-	default:
-		return nil, fmt.Errorf("unknown adapter type %q", connType)
-	}
-}

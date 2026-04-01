@@ -19,6 +19,12 @@ var systemDBs = map[string]bool{
 	"local":  true,
 }
 
+var _ adapters.Adapter = (*adapter)(nil)
+
+func init() {
+	adapters.RegisterFactory("mongodb", func() adapters.Adapter { return New() })
+}
+
 type adapter struct {
 	client *mongo.Client
 	uri    string
