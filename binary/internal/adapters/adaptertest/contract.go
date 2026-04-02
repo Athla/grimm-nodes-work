@@ -1,3 +1,17 @@
+// Package adaptertest provides a contract test suite for the adapters.Adapter interface.
+//
+// Every adapter MUST have an integration test that calls RunContractTests. This
+// ensures all adapters behave consistently regardless of the underlying technology.
+//
+// To add tests for a new adapter:
+//
+//  1. Create <adapter>_integration_test.go with build tag "//go:build integration"
+//  2. Use testcontainers-go in TestMain to start a real instance
+//  3. Seed representative data
+//  4. Call RunContractTests with the connected adapter and expected values
+//  5. Add adapter-specific tests alongside the contract call
+//
+// Run with: go test -tags=integration ./internal/adapters/...
 package adaptertest
 
 import (
@@ -13,6 +27,8 @@ type ContractOpts struct {
 	// Minimum edge count after seeding.
 	MinEdges int
 	// Expected type of the root node (e.g., "elasticsearch", "database").
+	// For adapters with multiple roots (e.g., MongoDB, S3), this validates
+	// that at least one root has this type.
 	RootNodeType string
 	// Expected types for child nodes (e.g., "index", "table").
 	ChildNodeTypes []string
@@ -20,6 +36,11 @@ type ContractOpts struct {
 	ExpectFKEdges bool
 	// Health metric keys that must be present.
 	RequiredHealthKeys []string
+	// Whether the adapter allows multiple root nodes (e.g., MongoDB databases, S3 buckets).
+	MultiRoot bool
+	// Skip Connect/missing_required_field test for adapters where empty config
+	// fails at connectivity rather than config validation (e.g., S3).
+	SkipConnectMissing bool
 }
 
 // RunContractTests validates that an adapter satisfies the Adapter interface contract.
@@ -38,14 +59,16 @@ func RunContractTests(t *testing.T, a adapters.Adapter, newAdapter func() adapte
 			fresh.Close()
 		})
 
-		t.Run("missing_required_field", func(t *testing.T) {
-			t.Parallel()
-			fresh := newAdapter()
-			err := fresh.Connect(adapters.ConnectionConfig{})
-			if err == nil {
-				t.Fatal("Connect with empty config should return an error")
-			}
-		})
+		if !opts.SkipConnectMissing {
+			t.Run("missing_required_field", func(t *testing.T) {
+				t.Parallel()
+				fresh := newAdapter()
+				err := fresh.Connect(adapters.ConnectionConfig{})
+				if err == nil {
+					t.Fatal("Connect with empty config should return an error")
+				}
+			})
+		}
 	})
 
 	// Run Discover once and share results across subtests.
@@ -58,18 +81,20 @@ func RunContractTests(t *testing.T, a adapters.Adapter, newAdapter func() adapte
 
 		t.Run("returns_root_node", func(t *testing.T) {
 			t.Parallel()
-			var found bool
+			var rootCount int
 			for _, n := range allNodes {
 				if n.Parent == "" {
+					rootCount++
 					if n.Type != opts.RootNodeType {
 						t.Errorf("root node type = %q, want %q", n.Type, opts.RootNodeType)
 					}
-					found = true
-					break
 				}
 			}
-			if !found {
+			if rootCount == 0 {
 				t.Fatal("no root node (Parent == \"\") found")
+			}
+			if !opts.MultiRoot && rootCount > 1 {
+				t.Errorf("got %d root nodes, expected exactly 1 (set MultiRoot if multiple roots are intended)", rootCount)
 			}
 		})
 

@@ -1,3 +1,7 @@
+// Package adapters defines the Adapter interface and factory registry.
+//
+// When adding a new adapter, you MUST also add an integration test using the
+// adaptertest.RunContractTests suite. See adaptertest package for instructions.
 package adapters
 
 import (

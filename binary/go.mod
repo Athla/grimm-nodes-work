@@ -15,7 +15,10 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/testcontainers/testcontainers-go/modules/elasticsearch v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/minio v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/mongodb v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/mysql v0.41.0
+	github.com/testcontainers/testcontainers-go/modules/postgres v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.41.0
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	golang.org/x/sync v0.19.0

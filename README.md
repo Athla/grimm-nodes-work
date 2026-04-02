@@ -17,9 +17,12 @@ graph-info **auto-discovers** your infrastructure by connecting to the Docker da
 
 | Capability | Details |
 |---|---|
-| **Auto-discovery** | Detects PostgreSQL, MongoDB, MinIO/S3, Redis, and HTTP services from Docker containers |
+| **Auto-discovery** | Detects PostgreSQL, MongoDB, MySQL, Redis, Elasticsearch, MinIO/S3, and HTTP services from Docker containers |
 | **PostgreSQL** | Tables, foreign key relationships, schema topology |
 | **MongoDB** | Databases and collections |
+| **MySQL** | Tables, foreign key relationships |
+| **Redis** | Keyspaces and key distribution |
+| **Elasticsearch** | Indices, cluster health, shard status |
 | **S3 / MinIO** | Buckets and top-level prefixes |
 | **HTTP services** | Health endpoints, dependency mapping between services |
 | **Real-time health** | WebSocket-powered live status updates every 5 seconds |
@@ -101,7 +104,7 @@ make docker-build && make docker-up
 ### Prerequisites
 - Go 1.25.6+
 - Node.js 24+ (or Bun)
-- PostgreSQL, MongoDB, or S3 (optional, for testing adapters)
+- Docker (required for integration tests)
 
 ### Backend Setup
 
@@ -146,7 +149,11 @@ make test         # Run all tests
 
 ## Configuration
 
-graph-info uses a YAML configuration file at `conf/config.yaml`. See `conf/config.sample.yaml` for examples.
+**Auto-discovery is the preferred way to use graph-info.** Mount the Docker socket and graph-info will automatically detect your databases, storage, and services — no configuration needed.
+
+The YAML config file (`conf/config.yaml`) is only needed for services that **aren't** running in Docker, such as remote databases, managed cloud services, or external endpoints. When both are used, graph-info merges discovered services with the config file, so you get the best of both.
+
+See `conf/config.sample.yaml` for examples.
 
 ### PostgreSQL Adapter
 
@@ -189,6 +196,46 @@ connections:
     secret_access_key: minioadmin
 ```
 
+### MySQL Adapter
+
+```yaml
+connections:
+  - name: mysql
+    type: mysql
+    dsn: "root:password@tcp(localhost:3306)/mydb"
+```
+
+### Redis Adapter
+
+```yaml
+connections:
+  - name: redis
+    type: redis
+    uri: "redis://localhost:6379"
+```
+
+Or with host/port (useful for Docker discovery):
+
+```yaml
+connections:
+  - name: redis
+    type: redis
+    host: localhost
+    port: 6379
+    password: ""
+```
+
+### Elasticsearch Adapter
+
+```yaml
+connections:
+  - name: elasticsearch
+    type: elasticsearch
+    endpoint: "http://localhost:9200"
+    username: elastic
+    password: changeme
+```
+
 **Important:** This tool is intended for authorized infrastructure visualization and monitoring of systems you own or have permission to access. Do not use it to scan or access systems without authorization.
 
 ---
@@ -201,10 +248,13 @@ connections:
 Docker Daemon ──→ Auto-Discovery ──→ Classify containers
                                          ↓
 Config (YAML) ──→ Adapter Registry ──→ Merge discovered + configured
-                      ├─ PostgreSQL Adapter → Tables + foreign keys
-                      ├─ MongoDB Adapter    → Collections
-                      ├─ S3 Adapter         → Buckets + prefixes
-                      └─ HTTP Adapter       → Service health + dependencies
+                      ├─ PostgreSQL Adapter     → Tables + foreign keys
+                      ├─ MongoDB Adapter        → Databases + collections
+                      ├─ MySQL Adapter          → Tables + foreign keys
+                      ├─ Redis Adapter          → Keyspaces
+                      ├─ Elasticsearch Adapter  → Indices + cluster health
+                      ├─ S3 Adapter             → Buckets + prefixes
+                      └─ HTTP Adapter           → Service health + dependencies
                       ↓
                   Graph Model (Nodes + Edges)
                       ↓
@@ -244,8 +294,12 @@ Edges represent relationships (foreign keys, contains, etc.).
 - gorilla/mux (HTTP routing)
 - pgxpool (PostgreSQL)
 - mongo-driver v2 (MongoDB)
+- go-sql-driver/mysql (MySQL)
+- go-redis/v9 (Redis)
+- go-elasticsearch/v8 (Elasticsearch)
 - AWS SDK v2 (S3)
 - coder/websocket (WebSocket)
+- testcontainers-go (integration tests)
 
 **Frontend:**
 - TypeScript
@@ -257,7 +311,48 @@ Edges represent relationships (foreign keys, contains, etc.).
 - Docker + Docker Compose
 - PostgreSQL 17
 - MongoDB 7
+- MySQL 8
+- Redis 7
+- Elasticsearch 8
 - MinIO (S3-compatible)
+
+---
+
+## Testing
+
+### Unit Tests
+
+```bash
+cd binary && go test ./...
+```
+
+Runs without Docker. Includes pure function tests and HTTP handler tests.
+
+### Integration Tests
+
+```bash
+cd binary && go test -tags=integration -v -timeout=5m ./internal/adapters/...
+```
+
+Requires Docker. Uses [testcontainers-go](https://golang.testcontainers.org/) to spin up real database instances (PostgreSQL, MongoDB, MySQL, Redis, Elasticsearch, MinIO) — no mocks.
+
+Every adapter runs through the **contract test suite** (`adaptertest.RunContractTests`) which validates:
+- Connect/disconnect lifecycle
+- Node/edge discovery (unique IDs, valid parent refs, correct types)
+- Health metrics (status key, required keys)
+
+Run a single adapter's tests:
+
+```bash
+cd binary && go test -tags=integration -v ./internal/adapters/redis/
+```
+
+### All Tests
+
+```bash
+make test  # unit + type-check
+cd binary && go test -tags=integration -timeout=5m ./internal/adapters/...  # integration
+```
 
 ---
 
@@ -325,10 +420,17 @@ Streams real-time health updates.
        Close() error
    }
    ```
-3. **Register in the adapter registry** (`binary/internal/adapters/registry.go`)
-4. **Add node type** in `binary/internal/graph/nodes/nodes.go`
-5. **Update frontend types** in `webui/src/types/graph.ts`
-6. **Add icon** in `webui/src/components/graph/CustomNode.tsx`
+3. **Self-register** via `init()` with `adapters.RegisterFactory("name", ...)`
+4. **Add integration tests** (required) — create `{name}_integration_test.go` with:
+   - Build tag `//go:build integration`
+   - `TestMain` using testcontainers-go to start a real instance
+   - Seed representative data
+   - Call `adaptertest.RunContractTests` to validate the interface contract
+   - Add adapter-specific tests (filtering, ID format, metadata, etc.)
+5. **Import adapter** in `binary/internal/server/server.go` (blank import for `init()`)
+6. **Add node type** in `binary/internal/graph/nodes/nodes.go`
+7. **Update frontend types** in `webui/src/types/graph.ts`
+8. **Add icon** in `webui/src/components/graph/CustomNode.tsx`
 
 See `CONTRIBUTING.md` for detailed guidance.
 
@@ -373,7 +475,7 @@ See the [LICENSE](LICENSE) file for details. AGPL requires that modified version
 
 The project uses GitHub Actions for continuous integration and automated releases.
 
-- **CI** runs on every push/PR to `main` — backend tests and frontend build
+- **CI** runs on every push/PR to `main` — backend unit tests, integration tests (testcontainers), and frontend build
 - **Releases** are triggered by version tags (`v*`) and produce:
   - Cross-platform binaries (Linux, macOS, Windows) via [GoReleaser](https://goreleaser.com)
   - Docker images pushed to `ghcr.io/guilherme-grimm/graph-go-backend` and `-frontend`
@@ -390,9 +492,12 @@ git push --tags
 
 - [x] Docker auto-discovery
 - [x] HTTP service health monitoring
-- [ ] Redis adapter
+- [x] MySQL adapter
+- [x] Redis adapter
+- [x] Elasticsearch adapter
+- [x] Integration tests with testcontainers-go (all adapters)
+- [x] Contract test suite for adapter interface compliance
 - [ ] Kafka adapter
-- [ ] Elasticsearch adapter
 - [ ] Custom edge types (replication, sharding)
 - [ ] Graph persistence (save/load views)
 - [ ] Multi-region visualization

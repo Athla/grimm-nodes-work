@@ -1,9 +1,15 @@
 # graph-go: Planned Features
 
-## In Progress
+## Done
 
 ### New Adapters
 - MySQL, Redis, Elasticsearch adapters (branch: `feature/new-adapters`)
+
+### Integration & Contract Tests
+- Integration tests using `testcontainers-go` for all adapters (PostgreSQL, MongoDB, MySQL, Redis, Elasticsearch, S3/MinIO)
+- Shared contract test suite (`adaptertest.RunContractTests`) — validates Adapter interface compliance
+- Build tag `//go:build integration` keeps tests out of `go test ./...`; CI runs them separately
+- Contract tests are a documented requirement for all new adapters
 
 ---
 
@@ -39,8 +45,7 @@
 - **Phase 1:** Structural topology only — topics, partitions, consumer groups (Kafka); exchanges, queues, bindings (RabbitMQ); subjects/streams (NATS)
 - **Phase 2 (major milestone):** Infer producer/consumer relationships and visualize full application flow in a dedicated detailed view. Most broker APIs expose enough for reasonable inference without app-side instrumentation.
 
-### Integration & Stress Tests
-- Integration tests using `testcontainers-go` per adapter (connect, discover, health)
+### Stress Tests
 - Stress test mode:
   - Target: the discovered services themselves (Postgres, Redis, etc.)
   - Triggered from the UI per node
@@ -71,7 +76,7 @@
 2. Startup report — immediately improves DX, low effort
 3. `graphgo validate` — unblocks safer config iteration
 4. CLI export (`graphgo export`) — unlocks CI/docs use cases
-5. Integration tests — testcontainers-go per adapter
+5. ~~Integration tests — testcontainers-go per adapter~~ **Done**
 6. Orchestrator support (K8s first)
 7. Message broker adapters (Phase 1)
 8. Stress test mode
