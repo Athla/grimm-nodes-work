@@ -11,6 +11,12 @@ import (
 	"binary/internal/graph/nodes"
 )
 
+var _ adapters.Adapter = (*adapter)(nil)
+
+func init() {
+	adapters.RegisterFactory("http", func() adapters.Adapter { return New() })
+}
+
 type DependsOnEntry struct {
 	Target string `json:"target"`
 	Label  string `json:"label"`
@@ -52,12 +58,24 @@ func (a *adapter) Connect(config adapters.ConnectionConfig) error {
 		return fmt.Errorf("http: name is required")
 	}
 
-	if deps, ok := config["depends_on"].([]map[string]string); ok {
+	switch deps := config["depends_on"].(type) {
+	case []map[string]string:
 		for _, d := range deps {
 			a.dependsOn = append(a.dependsOn, DependsOnEntry{
 				Target: d["target"],
 				Label:  d["label"],
 			})
+		}
+	case []any:
+		for _, raw := range deps {
+			if d, ok := raw.(map[string]any); ok {
+				target, _ := d["target"].(string)
+				label, _ := d["label"].(string)
+				a.dependsOn = append(a.dependsOn, DependsOnEntry{
+					Target: target,
+					Label:  label,
+				})
+			}
 		}
 	}
 

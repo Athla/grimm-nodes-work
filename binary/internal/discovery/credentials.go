@@ -22,6 +22,10 @@ func ExtractCredentials(svcType ServiceType, envVars []string, containerHost str
 		return extractS3Credentials(env, containerHost)
 	case TypeRedis:
 		return extractRedisCredentials(env, containerHost)
+	case TypeMySQL:
+		return extractMySQLCredentials(env, containerHost)
+	case TypeElasticsearch:
+		return extractElasticsearchCredentials(env, containerHost)
 	case TypeHTTP:
 		return extractHTTPCredentials(env, containerHost, containerName)
 	default:
@@ -103,6 +107,37 @@ func extractHTTPCredentials(env map[string]string, host string, containerName st
 		"health_path": "/health",
 		"name":        containerName,
 	}
+}
+
+func extractMySQLCredentials(env map[string]string, host string) adapters.ConnectionConfig {
+	user := envOrDefault(env, "MYSQL_USER", "root")
+	pass := envOrDefault(env, "MYSQL_ROOT_PASSWORD", "")
+	if pass == "" {
+		pass = envOrDefault(env, "MYSQL_PASSWORD", "")
+	}
+	db := envOrDefault(env, "MYSQL_DATABASE", "")
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
+		user, url.QueryEscape(pass), host, DefaultPortForType(TypeMySQL), db)
+
+	return adapters.ConnectionConfig{"dsn": dsn}
+}
+
+func extractElasticsearchCredentials(env map[string]string, host string) adapters.ConnectionConfig {
+	endpoint := fmt.Sprintf("http://%s:%d", host, DefaultPortForType(TypeElasticsearch))
+
+	cfg := adapters.ConnectionConfig{
+		"endpoint": endpoint,
+	}
+
+	user := envOrDefault(env, "ELASTIC_USERNAME", "elastic")
+	pass := envOrDefault(env, "ELASTIC_PASSWORD", "")
+	if pass != "" {
+		cfg["username"] = user
+		cfg["password"] = pass
+	}
+
+	return cfg
 }
 
 func envOrDefault(env map[string]string, key, fallback string) string {

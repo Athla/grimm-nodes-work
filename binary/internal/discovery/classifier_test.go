@@ -46,6 +46,31 @@ func TestClassifyImage(t *testing.T) {
 		{"redis-commander:latest", TypeHTTP},
 		{"redis-insight:latest", TypeHTTP},
 
+		// MySQL
+		{"mysql:8", TypeMySQL},
+		{"mysql:latest", TypeMySQL},
+		{"docker.io/library/mysql:8.0", TypeMySQL},
+
+		// MySQL excludes
+		{"mysql-exporter:latest", TypeHTTP},
+		{"phpmyadmin:latest", TypeHTTP},
+		{"mysql-router:latest", TypeHTTP},
+
+		// MariaDB → mysql type
+		{"mariadb:11", TypeMySQL},
+		{"mariadb:latest", TypeMySQL},
+
+		// MariaDB excludes
+		{"mariadb-exporter:latest", TypeHTTP},
+
+		// Elasticsearch
+		{"elasticsearch:8.12.0", TypeElasticsearch},
+		{"docker.elastic.co/elasticsearch/elasticsearch:8.12.0", TypeElasticsearch},
+
+		// Elasticsearch excludes
+		{"elasticsearch-exporter:latest", TypeHTTP},
+		{"kibana:8.12.0", TypeHTTP},
+
 		// HTTP fallback
 		{"nginx:latest", TypeHTTP},
 		{"my-custom-app:v1.0", TypeHTTP},
@@ -71,6 +96,8 @@ func TestDefaultPortForType(t *testing.T) {
 		{TypeMongoDB, 27017},
 		{TypeS3, 9000},
 		{TypeRedis, 6379},
+		{TypeMySQL, 3306},
+		{TypeElasticsearch, 9200},
 		{TypeHTTP, 8080},
 		{"unknown", 8080},
 	}

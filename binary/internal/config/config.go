@@ -36,6 +36,8 @@ type ConnectionEntry struct {
 	Endpoint        string           `yaml:"endpoint,omitempty"`
 	AccessKeyID     string           `yaml:"access_key_id,omitempty"`
 	SecretAccessKey string           `yaml:"secret_access_key,omitempty"`
+	Username        string           `yaml:"username,omitempty"`
+	Password        string           `yaml:"password,omitempty"`
 	HealthPath      string           `yaml:"health_path,omitempty"`
 	NodeType        string           `yaml:"node_type,omitempty"`
 	DependsOn       []DependsOnEntry `yaml:"depends_on,omitempty"`
@@ -80,8 +82,18 @@ func (cfg *Config) Validate() error {
 			if conn.Endpoint == "" {
 				return fmt.Errorf("config: connections[%d] (%s): 'endpoint' is required for %s", i, conn.Name, conn.Type)
 			}
+		case "mysql":
+			if conn.DSN == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'dsn' is required for mysql", i, conn.Name)
+			}
+		case "elasticsearch":
+			if conn.Endpoint == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'endpoint' is required for elasticsearch", i, conn.Name)
+			}
 		case "redis":
-			// Valid type, adapter not yet implemented
+			if conn.URI == "" && conn.Endpoint == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'uri' or 'endpoint' is required for redis", i, conn.Name)
+			}
 		default:
 			return fmt.Errorf("config: connections[%d] (%s): unknown type %q", i, conn.Name, conn.Type)
 		}
@@ -131,6 +143,30 @@ func (e *ConnectionEntry) ToConnectionConfig() adapters.ConnectionConfig {
 				deps[i] = map[string]string{"target": d.Target, "label": d.Label}
 			}
 			cfg["depends_on"] = deps
+		}
+	case "mysql":
+		if e.DSN != "" {
+			cfg["dsn"] = e.DSN
+		}
+	case "redis":
+		if e.URI != "" {
+			cfg["uri"] = e.URI
+		}
+		if e.Endpoint != "" {
+			cfg["host"] = e.Endpoint
+		}
+		if e.Password != "" {
+			cfg["password"] = e.Password
+		}
+	case "elasticsearch":
+		if e.Endpoint != "" {
+			cfg["endpoint"] = e.Endpoint
+		}
+		if e.Username != "" {
+			cfg["username"] = e.Username
+		}
+		if e.Password != "" {
+			cfg["password"] = e.Password
 		}
 	default:
 		log.Printf("WARNING: ToConnectionConfig: unrecognized type %q for %q", e.Type, e.Name)

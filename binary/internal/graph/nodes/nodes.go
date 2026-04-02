@@ -16,8 +16,11 @@ const (
 	TypeApi        NodeType = "api"
 	TypeGateway    NodeType = "gateway"
 	TypeAuth       NodeType = "auth"
-	TypeQueue      NodeType = "queue"
-	TypeCache      NodeType = "cache"
+	TypeQueue         NodeType = "queue"
+	TypeCache         NodeType = "cache"
+	TypeMySQL         NodeType = "mysql"
+	TypeElasticsearch NodeType = "elasticsearch"
+	TypeIndex         NodeType = "index"
 )
 
 type Node struct {
