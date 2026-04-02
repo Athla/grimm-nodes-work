@@ -101,7 +101,7 @@ func TestContract(t *testing.T) {
 
 func TestConnect_URI(t *testing.T) {
 	host, _ := testConfig["host"].(string)
-	port, _ := testConfig["port"].(int)
+	port, _ := testConfig["port"].(uint16)
 	uri := fmt.Sprintf("redis://%s:%d", host, port)
 
 	a := New()

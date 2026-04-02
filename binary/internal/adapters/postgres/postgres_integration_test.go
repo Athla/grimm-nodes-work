@@ -30,6 +30,7 @@ func TestMain(m *testing.M) {
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
+		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start postgres container: %v\n", err)
