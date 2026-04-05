@@ -1,4 +1,4 @@
-package discovery
+package docker
 
 import (
 	"strings"

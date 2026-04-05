@@ -180,14 +180,18 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 			adapterHealth[m.NodeID] = string(m.Status)
 		}
 
-		// Send a health update for each node, using the health of its
-		// owning adapter (matched via node.Metadata["adapter"]).
+		// Send a health update for each node. Adapter-owned nodes get their
+		// health via the adapter lookup; topology nodes (e.g. Kubernetes
+		// resources) carry health directly on Node.Health.
 		if g != nil {
 			for _, node := range g.Nodes {
 				adapterName, _ := node.Metadata["adapter"].(string)
 				healthStr, ok := adapterHealth[adapterName]
 				if !ok {
-					continue
+					if node.Health == "" {
+						continue
+					}
+					healthStr = node.Health
 				}
 				msg := map[string]any{
 					"type": "health_update",

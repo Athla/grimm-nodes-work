@@ -4,53 +4,57 @@ import (
 	"binary/internal/adapters"
 )
 
-// YAMLEntry holds the fields MergeServices needs from a config entry.
+// SourceYAML identifies services originating from YAML configuration.
+const SourceYAML = "yaml"
+
+// YAMLEntry holds the fields MergeWithYAML needs from a config entry.
 type YAMLEntry struct {
 	Name   string
 	Type   string
 	Config adapters.ConnectionConfig
 }
 
-// MergeServices merges Docker-discovered services with YAML config entries.
-// YAML entries override Docker-discovered entries when matched by name.
-// YAML-only entries (not found in Docker) are appended.
-func MergeServices(discovered []DiscoveredService, yamlEntries []YAMLEntry) []DiscoveredService {
-	// Build lookup of YAML entries by name
+// MergeWithYAML applies YAML overrides to discovered services. A YAML entry
+// whose Name matches a discovered service overrides that service's Type and
+// Config (preserving Source/Nodes/Edges/Health/Metadata). YAML entries with
+// no matching discovered service are appended with Source="yaml".
+func MergeWithYAML(discovered []ServiceInfo, yamlEntries []YAMLEntry) []ServiceInfo {
 	yamlByName := make(map[string]YAMLEntry, len(yamlEntries))
-	for _, entry := range yamlEntries {
-		yamlByName[entry.Name] = entry
+	for _, e := range yamlEntries {
+		yamlByName[e.Name] = e
 	}
 
-	// Track which YAML entries have been matched
 	matched := make(map[string]bool)
+	result := make([]ServiceInfo, 0, len(discovered)+len(yamlEntries))
 
-	// Apply YAML overrides to Docker-discovered services
-	result := make([]DiscoveredService, 0, len(discovered)+len(yamlEntries))
 	for _, svc := range discovered {
-		if yamlEntry, ok := yamlByName[svc.Name]; ok {
-			// YAML overrides Docker discovery
+		if e, ok := yamlByName[svc.Name]; ok {
 			matched[svc.Name] = true
-			result = append(result, DiscoveredService{
-				Name:        yamlEntry.Name,
-				Type:        ServiceType(yamlEntry.Type),
-				Config:      yamlEntry.Config,
-				IPAddress:   svc.IPAddress,
-				ContainerID: svc.ContainerID,
+			result = append(result, ServiceInfo{
+				Name:     e.Name,
+				Type:     e.Type,
+				Source:   svc.Source,
+				Config:   e.Config,
+				Nodes:    svc.Nodes,
+				Edges:    svc.Edges,
+				Health:   svc.Health,
+				Metadata: svc.Metadata,
 			})
-		} else {
-			result = append(result, svc)
+			continue
 		}
+		result = append(result, svc)
 	}
 
-	// Append YAML-only entries (not found in Docker)
-	for _, entry := range yamlEntries {
-		if !matched[entry.Name] {
-			result = append(result, DiscoveredService{
-				Name:   entry.Name,
-				Type:   ServiceType(entry.Type),
-				Config: entry.Config,
-			})
+	for _, e := range yamlEntries {
+		if matched[e.Name] {
+			continue
 		}
+		result = append(result, ServiceInfo{
+			Name:   e.Name,
+			Type:   e.Type,
+			Source: SourceYAML,
+			Config: e.Config,
+		})
 	}
 
 	return result

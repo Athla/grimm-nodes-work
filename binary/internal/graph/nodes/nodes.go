@@ -21,6 +21,14 @@ const (
 	TypeMySQL         NodeType = "mysql"
 	TypeElasticsearch NodeType = "elasticsearch"
 	TypeIndex         NodeType = "index"
+
+	// Kubernetes resource types.
+	TypeNamespace   NodeType = "namespace"
+	TypeDeployment  NodeType = "deployment"
+	TypeStatefulSet NodeType = "statefulset"
+	TypeDaemonSet   NodeType = "daemonset"
+	TypePod         NodeType = "pod"
+	TypeK8sService  NodeType = "k8s_service"
 )
 
 type Node struct {

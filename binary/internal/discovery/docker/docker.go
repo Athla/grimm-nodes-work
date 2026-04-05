@@ -1,10 +1,11 @@
-package discovery
+package docker
 
 import (
 	"context"
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -12,7 +13,11 @@ import (
 	"github.com/docker/docker/client"
 
 	"binary/internal/adapters"
+	"binary/internal/discovery"
 )
+
+// SourceName is the Source tag applied to ServiceInfo produced by this discoverer.
+const SourceName = "docker"
 
 // DiscoveredService represents a service found via Docker daemon inspection.
 type DiscoveredService struct {
@@ -32,10 +37,17 @@ type DockerDiscoveryConfig struct {
 }
 
 // DockerDiscovery connects to the Docker daemon and discovers running services.
+// It implements discovery.Discoverer.
 type DockerDiscovery struct {
 	client *client.Client
 	cfg    DockerDiscoveryConfig
 }
+
+// Compile-time check that DockerDiscovery satisfies discovery.Discoverer.
+var _ discovery.Discoverer = (*DockerDiscovery)(nil)
+
+// Name returns the discoverer identifier used for logging.
+func (d *DockerDiscovery) Name() string { return SourceName }
 
 // NewDockerDiscovery creates a new DockerDiscovery instance and verifies
 // connectivity to the daemon via Ping.
@@ -76,9 +88,11 @@ func (d *DockerDiscovery) Client() *client.Client {
 	return d.client
 }
 
-// Discover lists running containers and inspects each to build a list
-// of discovered services.
-func (d *DockerDiscovery) Discover(ctx context.Context) ([]DiscoveredService, error) {
+// Discover lists running containers and inspects each to build a list of
+// discovered services. Each service is returned as a discovery.ServiceInfo
+// with Source="docker"; Docker-specific fields (IP, container ID) are
+// preserved in Metadata.
+func (d *DockerDiscovery) Discover(ctx context.Context) ([]discovery.ServiceInfo, error) {
 	listOpts := container.ListOptions{
 		Filters: filters.NewArgs(
 			filters.Arg("status", "running"),
@@ -90,17 +104,34 @@ func (d *DockerDiscovery) Discover(ctx context.Context) ([]DiscoveredService, er
 		return nil, fmt.Errorf("discovery: failed to list containers: %w", err)
 	}
 
-	var services []DiscoveredService
-
+	services := make([]discovery.ServiceInfo, 0, len(containers))
 	for _, ctr := range containers {
 		svc, ok := d.processContainer(ctx, ctr)
 		if !ok {
 			continue
 		}
-		services = append(services, svc)
+		services = append(services, discovery.ServiceInfo{
+			Name:   svc.Name,
+			Type:   string(svc.Type),
+			Source: SourceName,
+			Config: svc.Config,
+			Metadata: map[string]any{
+				"ip_address":   svc.IPAddress,
+				"container_id": svc.ContainerID,
+			},
+		})
 	}
 
 	return services, nil
+}
+
+// Watch subscribes to Docker container start/stop/die events and invokes
+// onChange for each one, debounced to collapse bursts (e.g. docker-compose up
+// starting many containers at once). It blocks until ctx is cancelled.
+func (d *DockerDiscovery) Watch(ctx context.Context, onChange func()) error {
+	deb := discovery.NewDebouncer(onChange, 2*time.Second)
+	defer deb.Stop()
+	return watchEvents(ctx, d.client, deb.Trigger)
 }
 
 func (d *DockerDiscovery) processContainer(ctx context.Context, ctr types.Container) (DiscoveredService, bool) {

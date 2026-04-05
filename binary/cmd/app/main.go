@@ -50,12 +50,11 @@ func main() {
 	}
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		log.Printf("WARNING: could not load config: %v (starting with zero adapters)", err)
+		log.Printf("WARNING: defaulting to auto-discovery as there's nothing in config files: %v", err)
 		cfg = &config.Config{}
 	}
 
 	srv, cleanup := server.NewServer(cfg)
-
 	// Create a done channel to signal when the shutdown is complete
 	done := make(chan bool, 1)
 
