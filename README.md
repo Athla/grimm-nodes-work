@@ -17,7 +17,9 @@ graph-info **auto-discovers** your infrastructure by connecting to the Docker da
 
 | Capability | Details |
 |---|---|
-| **Auto-discovery** | Detects PostgreSQL, MongoDB, MySQL, Redis, Elasticsearch, MinIO/S3, and HTTP services from Docker containers |
+| **Auto-discovery** | Detects infrastructure from Docker containers and Kubernetes clusters — no manual inventory needed |
+| **Kubernetes** | Namespaces, Deployments, StatefulSets, DaemonSets, Pods, Services — with informer-based real-time watching |
+| **Docker** | Classifies running containers, extracts credentials, watches Docker events for live topology changes |
 | **PostgreSQL** | Tables, foreign key relationships, schema topology |
 | **MongoDB** | Databases and collections |
 | **MySQL** | Tables, foreign key relationships |
@@ -26,7 +28,7 @@ graph-info **auto-discovers** your infrastructure by connecting to the Docker da
 | **S3 / MinIO** | Buckets and top-level prefixes |
 | **HTTP services** | Health endpoints, dependency mapping between services |
 | **Real-time health** | WebSocket-powered live status updates every 5 seconds |
-| **Interactive graph** | Pan, zoom, filter by type/health, search nodes, pin layouts |
+| **Interactive graph** | Swimlane layout, namespace group containers, pan/zoom, filter by type/health, search nodes |
 
 ---
 
@@ -149,11 +151,33 @@ make test         # Run all tests
 
 ## Configuration
 
-**Auto-discovery is the preferred way to use graph-info.** Mount the Docker socket and graph-info will automatically detect your databases, storage, and services — no configuration needed.
+**Auto-discovery is the preferred way to use graph-info.** Mount the Docker socket and/or run inside a Kubernetes cluster, and graph-info will automatically detect your infrastructure — no configuration needed. Both discoverers activate via auto-detection and run in parallel.
 
-The YAML config file (`conf/config.yaml`) is only needed for services that **aren't** running in Docker, such as remote databases, managed cloud services, or external endpoints. When both are used, graph-info merges discovered services with the config file, so you get the best of both.
+The YAML config file (`conf/config.yaml`) is only needed for services that aren't reachable via Docker or Kubernetes, such as remote databases, managed cloud services, or external endpoints. When both are used, graph-info merges discovered services with the config file.
 
 See `conf/config.sample.yaml` for examples.
+
+### Kubernetes Discovery
+
+Kubernetes discovery activates automatically when it detects an in-cluster service account or a `~/.kube/config`. Override with:
+
+```yaml
+kubernetes:
+  enabled: true          # nil = auto-detect
+  kubeconfig: ""         # path override; empty = default lookup
+  context: ""            # empty = current context
+  namespaces: []         # empty = all namespaces
+```
+
+### Docker Discovery
+
+```yaml
+docker:
+  enabled: true          # nil = auto-detect
+  socket: "/var/run/docker.sock"
+  network: ""            # limit to specific Docker network
+  ignore_images: []      # images to skip during classification
+```
 
 ### PostgreSQL Adapter
 
@@ -245,45 +269,76 @@ connections:
 ### Backend (Go)
 
 ```
-Docker Daemon ──→ Auto-Discovery ──→ Classify containers
-                                         ↓
-Config (YAML) ──→ Adapter Registry ──→ Merge discovered + configured
-                      ├─ PostgreSQL Adapter     → Tables + foreign keys
-                      ├─ MongoDB Adapter        → Databases + collections
-                      ├─ MySQL Adapter          → Tables + foreign keys
-                      ├─ Redis Adapter          → Keyspaces
-                      ├─ Elasticsearch Adapter  → Indices + cluster health
-                      ├─ S3 Adapter             → Buckets + prefixes
-                      └─ HTTP Adapter           → Service health + dependencies
-                      ↓
-                  Graph Model (Nodes + Edges)
-                      ↓
-                  REST API + WebSocket (Real-time health)
+                          ┌─────────────────────────────────────┐
+                          │         Discoverer Interface         │
+                          │  Discover() · Watch() · Close()     │
+                          └──────────┬──────────┬───────────────┘
+                                     │          │
+                          ┌──────────▼──┐  ┌────▼──────────────┐
+                          │   Docker    │  │   Kubernetes       │
+                          │  Discoverer │  │   Discoverer       │
+                          │ (containers,│  │ (informers, pods,  │
+                          │  classify,  │  │  deployments,      │
+                          │  events)    │  │  services, health) │
+                          └──────┬──────┘  └────┬──────────────┘
+                                 │               │
+                          ┌──────▼───────────────▼──────┐
+                          │  Parallel Discovery + Merge  │
+                          │  (concatenate ServiceInfo)   │
+                          └──────────────┬──────────────┘
+                                         │
+Config (YAML) ──→ YAML Merge ───────────▶│
+                                         ▼
+                          ┌─────────────────────────────┐
+                          │     Adapter Registry         │
+                          │  ├─ PostgreSQL  → Tables + FK│
+                          │  ├─ MongoDB    → Collections │
+                          │  ├─ MySQL      → Tables + FK │
+                          │  ├─ Redis      → Keyspaces   │
+                          │  ├─ Elasticsearch → Indices   │
+                          │  ├─ S3         → Buckets      │
+                          │  └─ HTTP       → Health + deps│
+                          │                               │
+                          │  + Topology (K8s nodes/edges) │
+                          └──────────────┬───────────────┘
+                                         ▼
+                          Graph Model (Nodes + Edges)
+                                         ▼
+                          REST API + WebSocket (Real-time)
 ```
 
 **Key Components:**
-- **Auto-Discovery**: Inspects Docker containers, classifies images, extracts credentials from env vars, watches Docker events for live topology changes
-- **Adapters**: Implement the `Adapter` interface to discover infrastructure
-- **Registry**: Manages adapters, creates service-level parent nodes, aggregates graph data
+- **Discoverer Interface**: Uniform contract (`Discover`, `Watch`, `Close`) for all discovery backends — Docker and Kubernetes run in parallel, results are concatenated
+- **Docker Discovery**: Inspects containers, classifies images, extracts credentials from env vars, watches Docker events for live topology changes
+- **Kubernetes Discovery**: Uses client-go informers with debounced event handling; discovers Namespaces, Deployments, StatefulSets, DaemonSets, Pods, and Services with health mapping
+- **Adapters**: Implement the `Adapter` interface to probe databases and storage services
+- **Registry**: Manages adapters and topology sets, creates service-level parent nodes, aggregates graph data
 - **Cache**: 30-second TTL with singleflight pattern to prevent thundering herd
 - **WebSocket**: Streams health updates every 5 seconds
 
 ### Frontend (React + TypeScript)
 
-- **React Flow**: Interactive graph visualization with pan/zoom
-- **Hierarchical Layout**: Automatically positions nodes by parent-child relationships
+- **Swimlane Layout**: Namespace-aware layout with zone classification (system, infra, application namespaces)
+- **Group Containers**: K8s namespaces render as collapsible bounding boxes via React Flow grouping
 - **Node Inspector**: Side panel showing detailed metadata and connections
 - **WebSocket Hook**: Real-time health updates without polling
 
 ### Node Hierarchy
 
 ```
-Service Node (postgres/mongodb/s3)
-    └─ Database/Bucket Node
-        └─ Table/Collection/Prefix Node
+Adapter-discovered:
+  Service Node (postgres/mongodb/s3)
+      └─ Database/Bucket Node
+          └─ Table/Collection/Prefix Node
+
+Kubernetes-discovered:
+  Namespace (group container)
+      └─ Deployment / StatefulSet / DaemonSet
+          └─ Pod
+      └─ K8sService ──routes_to──→ Pod
 ```
 
-Edges represent relationships (foreign keys, contains, etc.).
+Edges represent relationships (`contains`, `foreign_key`, `routes_to`, etc.).
 
 ---
 
@@ -292,6 +347,7 @@ Edges represent relationships (foreign keys, contains, etc.).
 **Backend:**
 - Go 1.25.6
 - gorilla/mux (HTTP routing)
+- k8s.io/client-go (Kubernetes discovery + informers)
 - pgxpool (PostgreSQL)
 - mongo-driver v2 (MongoDB)
 - go-sql-driver/mysql (MySQL)
@@ -432,6 +488,24 @@ Streams real-time health updates.
 7. **Update frontend types** in `webui/src/types/graph.ts`
 8. **Add icon** in `webui/src/components/graph/CustomNode.tsx`
 
+## Adding a New Discoverer
+
+Discoverers live in `binary/internal/discovery/{name}/` and implement the `Discoverer` interface:
+
+```go
+type Discoverer interface {
+    Name() string
+    Discover(ctx context.Context) ([]ServiceInfo, error)
+    Watch(ctx context.Context, onChange func()) error
+    Close() error
+}
+```
+
+1. **Create discoverer package** in `binary/internal/discovery/{name}/`
+2. **Implement the `Discoverer` interface** — return `[]ServiceInfo` from `Discover()`. Topology-producing discoverers (like K8s) populate `Nodes`/`Edges` directly; adapter-oriented ones (like Docker) populate `Config` for adapter bridging.
+3. **Wire into server** in `binary/internal/server/server.go` — add a `build{Name}Discovery()` function and call it alongside the existing discoverers.
+4. **Add integration tests** with `//go:build integration` — use real infrastructure (kind/k3d for K8s, testcontainers for others). No mocks.
+
 See `CONTRIBUTING.md` for detailed guidance.
 
 ---
@@ -497,8 +571,15 @@ git push --tags
 - [x] Elasticsearch adapter
 - [x] Integration tests with testcontainers-go (all adapters)
 - [x] Contract test suite for adapter interface compliance
+- [x] Discoverer interface (pluggable discovery backends)
+- [x] Kubernetes orchestrator (Namespaces, Deployments, StatefulSets, DaemonSets, Pods, Services)
+- [x] Informer-based real-time K8s watching with debounce
+- [x] Swimlane layout with namespace group containers
+- [ ] K8s adapter bridging (classify pods by image, connect adapters to databases in pods)
+- [ ] Flow observability (real-time data flow visualization)
+- [ ] Integrated stress trigger (k6 with real-time impact visualization)
 - [ ] Kafka adapter
-- [ ] Custom edge types (replication, sharding)
+- [ ] Additional orchestrators (ECS, Nomad)
 - [ ] Graph persistence (save/load views)
 - [ ] Multi-region visualization
 - [ ] Alert configuration per node

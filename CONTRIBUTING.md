@@ -68,7 +68,11 @@ cd webui && npx tsc --noEmit
 
 ## Adding a New Adapter
 
-See [README.md](README.md#adding-a-new-adapter) for the full step-by-step guide.
+See [README.md](README.md#adding-a-new-adapter) for the full step-by-step guide. Adapters live in `binary/internal/adapters/{name}/`.
+
+## Adding a New Discoverer
+
+See [README.md](README.md#adding-a-new-discoverer) for the full step-by-step guide. Discoverers live in `binary/internal/discovery/{name}/` and implement the `Discoverer` interface defined in `binary/internal/discovery/discovery.go`. Existing examples: `discovery/docker/` (adapter-oriented) and `discovery/kubernetes/` (topology-oriented).
 
 ### Integration Tests (Required)
 
