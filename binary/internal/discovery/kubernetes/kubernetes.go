@@ -56,9 +56,8 @@ type Discovery struct {
 
 	// readyCh is closed once informer caches have synced. All callers of
 	// Discover/Watch wait on this before reading listers.
-	readyCh  chan struct{}
-	startErr error // non-nil if start failed
-	once     sync.Once
+	readyCh chan struct{}
+	once    sync.Once
 
 	namespaces   corelisters.NamespaceLister
 	pods         corelisters.PodLister
@@ -210,7 +209,7 @@ func (d *Discovery) start(ctx context.Context) error {
 	// All callers (including concurrent ones) wait here until caches are synced.
 	select {
 	case <-d.readyCh:
-		return d.startErr
+		return nil
 	case <-ctx.Done():
 		return fmt.Errorf("kubernetes: informer cache sync: %w", ctx.Err())
 	}

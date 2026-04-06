@@ -2,6 +2,7 @@ package kubernetes_test
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -12,6 +13,55 @@ import (
 
 	"binary/internal/discovery/kubernetes"
 )
+
+// TestDiscover_ConcurrentCalls verifies that multiple goroutines calling
+// Discover concurrently all get consistent, non-empty results and that the
+// sync.Once + readyCh pattern prevents races on start().
+func TestDiscover_ConcurrentCalls(t *testing.T) {
+	client := fake.NewSimpleClientset(
+		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "p1", Namespace: "default"}},
+	)
+	d := kubernetes.NewWithClient(client, kubernetes.Config{})
+	t.Cleanup(func() { _ = d.Close() })
+
+	const goroutines = 10
+	results := make([]int, goroutines)
+	errs := make([]error, goroutines)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i := 0; i < goroutines; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			infos, err := d.Discover(ctx)
+			errs[i] = err
+			results[i] = len(infos)
+		}()
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("goroutine %d: Discover error: %v", i, err)
+		}
+	}
+
+	// All goroutines should see the same result count.
+	expected := results[0]
+	if expected == 0 {
+		t.Fatal("expected non-empty Discover result")
+	}
+	for i, got := range results {
+		if got != expected {
+			t.Errorf("goroutine %d: got %d results, expected %d", i, got, expected)
+		}
+	}
+}
 
 // TestWatch_FiresOnChangeAfterEvents verifies that informer events (Create/
 // Update/Delete on any of the six watched resources) drive the onChange

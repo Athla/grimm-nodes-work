@@ -83,11 +83,6 @@ func (d *DockerDiscovery) Close() error {
 	return nil
 }
 
-// Client returns the underlying Docker client (used by EventWatcher).
-func (d *DockerDiscovery) Client() *client.Client {
-	return d.client
-}
-
 // Discover lists running containers and inspects each to build a list of
 // discovered services. Each service is returned as a discovery.ServiceInfo
 // with Source="docker"; Docker-specific fields (IP, container ID) are
