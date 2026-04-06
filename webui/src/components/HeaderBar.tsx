@@ -2,12 +2,24 @@ import { useMemo, useState, useRef, useEffect } from 'react';
 import type { Graph, NodeType, HealthStatus } from '../types';
 import styles from './HeaderBar.module.css';
 
+export type NodeSource = 'docker' | 'kubernetes';
+
 export interface Filters {
   types: NodeType[];
   health: HealthStatus[];
+  sources: NodeSource[];
 }
 
-export type LayoutMode = 'hierarchical' | 'force';
+// K8s node types — used to infer source from node type.
+export const K8S_TYPES: ReadonlySet<NodeType> = new Set<NodeType>([
+  'namespace', 'deployment', 'statefulset', 'daemonset', 'pod', 'k8s_service',
+]);
+
+export function nodeSource(type: NodeType): NodeSource {
+  return K8S_TYPES.has(type) ? 'kubernetes' : 'docker';
+}
+
+export type LayoutMode = 'hierarchical' | 'force' | 'swimlane';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
 
@@ -27,6 +39,12 @@ const nodeTypes: NodeType[] = [
   'database', 'postgres', 'mongodb', 'redis', 'table', 'collection',
   'bucket', 's3', 'storage', 'service', 'api', 'http', 'gateway',
   'queue', 'cache', 'payment', 'auth',
+  'namespace', 'deployment', 'statefulset', 'daemonset', 'pod', 'k8s_service',
+];
+
+const sourceOptions: { value: NodeSource; label: string }[] = [
+  { value: 'docker', label: 'Docker' },
+  { value: 'kubernetes', label: 'Kubernetes' },
 ];
 
 const healthStatuses: HealthStatus[] = ['healthy', 'degraded', 'unhealthy'];
@@ -38,6 +56,12 @@ const wsStatusLabels: Record<ConnectionStatus, string> = {
   connecting: 'Connecting...',
   disconnected: 'Disconnected',
   error: 'Connection error',
+};
+
+const LAYOUT_LABELS: Record<LayoutMode, string> = {
+  swimlane: 'Swimlane (K8s)',
+  hierarchical: 'Hierarchical',
+  force: 'Force-Directed',
 };
 
 export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters, onFilterChange, layoutMode, onLayoutChange, onResetPositions, wsStatus }: HeaderBarProps) {
@@ -63,8 +87,12 @@ export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters,
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [dropdownOpen, mobileFiltersOpen]);
 
-  const hasActiveFilters = filters.types.length > 0 || filters.health.length > 0;
-  const activeFilterCount = filters.types.length + filters.health.length;
+  const graphHasNamespaces = useMemo(() => {
+    return graph?.nodes?.some(n => n.type === 'namespace') ?? false;
+  }, [graph]);
+
+  const hasActiveFilters = filters.types.length > 0 || filters.health.length > 0 || filters.sources.length > 0;
+  const activeFilterCount = filters.types.length + filters.health.length + filters.sources.length;
 
   const healthCounts = useMemo(() => {
     const sourceGraph = hasActiveFilters && filteredGraph ? filteredGraph : graph;
@@ -99,6 +127,58 @@ export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters,
     onFilterChange({ ...filters, health });
   };
 
+  const toggleSource = (source: NodeSource) => {
+    const sources = filters.sources.includes(source)
+      ? filters.sources.filter(s => s !== source)
+      : [...filters.sources, source];
+    onFilterChange({ ...filters, sources });
+  };
+
+  // Only show source chips whose nodes are actually present in the graph.
+  const activeSources = useMemo(() => {
+    if (!graph?.nodes) return [] as NodeSource[];
+    const present = new Set<NodeSource>();
+    for (const n of graph.nodes) present.add(nodeSource(n.type));
+    return sourceOptions.filter(opt => present.has(opt.value)).map(opt => opt.value);
+  }, [graph]);
+
+  const renderFilterChips = () => (
+    <>
+      {activeSources.length > 1 && activeSources.map(src => (
+        <button
+          key={`src-${src}`}
+          className={`${styles.filterChip} ${filters.sources.includes(src) ? styles.chipActive : ''}`}
+          onClick={() => toggleSource(src)}
+          aria-pressed={filters.sources.includes(src)}
+          title={`Source: ${src}`}
+        >
+          {sourceOptions.find(o => o.value === src)?.label ?? src}
+        </button>
+      ))}
+      {activeTypes.map(type => (
+        <button
+          key={type}
+          className={`${styles.filterChip} ${filters.types.includes(type) ? styles.chipActive : ''}`}
+          onClick={() => toggleType(type)}
+          aria-pressed={filters.types.includes(type)}
+        >
+          {type}
+        </button>
+      ))}
+      {healthStatuses.map(status => (
+        <button
+          key={status}
+          className={`${styles.filterChip} ${styles[`chip_${status}`]} ${filters.health.includes(status) ? styles.chipActive : ''}`}
+          onClick={() => toggleHealth(status)}
+          aria-pressed={filters.health.includes(status)}
+        >
+          <span className={`${styles.chipDot} ${styles[`chipDot_${status}`]}`} />
+          {status}
+        </button>
+      ))}
+    </>
+  );
+
   return (
     <header className={styles.header}>
       <span className={styles.appName}>
@@ -129,13 +209,26 @@ export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters,
           aria-haspopup="listbox"
           aria-expanded={dropdownOpen}
         >
-          Layout: {layoutMode === 'hierarchical' ? 'Hierarchical' : 'Force-Directed'}
+          Layout: {LAYOUT_LABELS[layoutMode]}
           <svg className={styles.chevron} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M6 9l6 6 6-6" />
           </svg>
         </button>
         {dropdownOpen && (
           <div className={styles.dropdown} role="listbox">
+            {graphHasNamespaces && (
+              <button
+                role="option"
+                aria-selected={layoutMode === 'swimlane'}
+                className={`${styles.dropdownItem} ${layoutMode === 'swimlane' ? styles.dropdownItemActive : ''}`}
+                onClick={() => {
+                  onLayoutChange('swimlane');
+                  setDropdownOpen(false);
+                }}
+              >
+                Swimlane (K8s)
+              </button>
+            )}
             <button
               role="option"
               aria-selected={layoutMode === 'hierarchical'}
@@ -190,27 +283,7 @@ export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters,
           </button>
           {mobileFiltersOpen && (
             <div className={styles.mobileFilterDropdown}>
-              {activeTypes.map(type => (
-                <button
-                  key={type}
-                  className={`${styles.filterChip} ${filters.types.includes(type) ? styles.chipActive : ''}`}
-                  onClick={() => toggleType(type)}
-                  aria-pressed={filters.types.includes(type)}
-                >
-                  {type}
-                </button>
-              ))}
-              {healthStatuses.map(status => (
-                <button
-                  key={status}
-                  className={`${styles.filterChip} ${styles[`chip_${status}`]} ${filters.health.includes(status) ? styles.chipActive : ''}`}
-                  onClick={() => toggleHealth(status)}
-                  aria-pressed={filters.health.includes(status)}
-                >
-                  <span className={`${styles.chipDot} ${styles[`chipDot_${status}`]}`} />
-                  {status}
-                </button>
-              ))}
+              {renderFilterChips()}
             </div>
           )}
         </div>
@@ -218,27 +291,7 @@ export default function HeaderBar({ graph, filteredGraph, onSearchOpen, filters,
 
       {activeTypes.length > 0 && (
         <div className={styles.filterGroup}>
-          {activeTypes.map(type => (
-            <button
-              key={type}
-              className={`${styles.filterChip} ${filters.types.includes(type) ? styles.chipActive : ''}`}
-              onClick={() => toggleType(type)}
-              aria-pressed={filters.types.includes(type)}
-            >
-              {type}
-            </button>
-          ))}
-          {healthStatuses.map(status => (
-            <button
-              key={status}
-              className={`${styles.filterChip} ${styles[`chip_${status}`]} ${filters.health.includes(status) ? styles.chipActive : ''}`}
-              onClick={() => toggleHealth(status)}
-              aria-pressed={filters.health.includes(status)}
-            >
-              <span className={`${styles.chipDot} ${styles[`chipDot_${status}`]}`} />
-              {status}
-            </button>
-          ))}
+          {renderFilterChips()}
         </div>
       )}
 

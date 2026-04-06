@@ -36,6 +36,7 @@
   --type-service: #22c55e;   /* service, api, http */
   --type-gateway: #f59e0b;   /* gateway, queue */
   --type-infra: #ec4899;     /* cache, payment, auth */
+  --type-k8s: #326ce5;       /* namespace, deployment, statefulset, daemonset, pod, k8s_service */
 
   /* Text hierarchy */
   --text-primary: #f5f5f5;
@@ -117,6 +118,29 @@
   --node-width: 180px;
   --node-height: 64px;
 
+  /* Per-type node sizing (k8s swimlane) */
+  --node-namespace-h: 40px;
+  --node-service-w: 200px;
+  --node-service-h: 80px;
+  --node-workload-w: 200px;
+  --node-workload-h: 80px;
+  --node-pod-w: 180px;
+  --node-pod-h: 72px;
+
+  /* Typography weight hierarchy */
+  --weight-namespace: 600;
+  --weight-workload: 500;
+  --weight-service: 500;
+  --weight-pod: 400;
+
+  /* Swimlane layout */
+  --lane-gap-y: 32px;
+  --lane-padding-x: 24px;
+  --lane-padding-y: 16px;
+  --lane-header-h: 40px;
+  --lane-column-gap: 48px;
+  --lane-row-gap: 16px;
+
   /* Graph layout */
   --graph-padding: 80px;
   --edge-width: 1.75px;
@@ -125,6 +149,9 @@
   /* Edge visibility */
   --edge-stroke: rgba(255, 255, 255, 0.35);
   --edge-stroke-hover: rgba(255, 255, 255, 0.6);
+  --edge-contains-stroke: rgba(255, 255, 255, 0.12);
+  --edge-routes-stroke: rgba(255, 255, 255, 0.45);
+  --edge-cross-ns-stroke: var(--type-gateway);
 
   /* Stronger node selection */
   --node-selected-glow: 0 0 0 2px var(--accent-highlight), 0 0 12px rgba(59, 130, 246, 0.25);
@@ -132,6 +159,10 @@
   /* Dynamic node sizing */
   --node-min-width: 160px;
   --node-max-width: 280px;
+
+  /* Pulse animation durations */
+  --pulse-duration-degraded: 2s;
+  --pulse-duration-unhealthy: 1.2s;
 
   /* Clickable link colors for panels */
   --link-color: var(--accent-highlight);

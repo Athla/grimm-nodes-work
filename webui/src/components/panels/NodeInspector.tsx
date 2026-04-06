@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Panel } from '../ui';
 import { useNodeFromGraph } from '../../api';
 import { calculatePriority, countConnections } from '../../utils';
@@ -229,18 +229,37 @@ function formatKey(key: string): string {
     .trim();
 }
 
-function formatValue(value: unknown): string {
+function formatValue(value: unknown): React.ReactNode {
+  if (value === null || value === undefined) {
+    return '—';
+  }
   if (Array.isArray(value)) {
-    return value.length > 0 ? value.join(', ') : '—';
+    if (value.length === 0) return '—';
+    return (
+      <span className={styles.tagList}>
+        {value.map((v, i) => (
+          <span key={i} className={styles.tag}>{String(v)}</span>
+        ))}
+      </span>
+    );
   }
   if (typeof value === 'boolean') {
     return value ? 'Yes' : 'No';
   }
-  if (typeof value === 'object' && value !== null) {
-    return JSON.stringify(value);
-  }
-  if (value === null || value === undefined) {
-    return '—';
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return '—';
+    return (
+      <span className={styles.tagList}>
+        {entries.map(([k, v]) => (
+          <span key={k} className={styles.tag}>
+            <span className={styles.tagKey}>{k}</span>
+            <span className={styles.tagSep}>=</span>
+            <span className={styles.tagVal}>{String(v)}</span>
+          </span>
+        ))}
+      </span>
+    );
   }
   return String(value);
 }

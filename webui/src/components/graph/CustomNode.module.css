@@ -159,3 +159,238 @@
 .pinSaved .card {
   animation: pin-flash 600ms var(--ease-smooth) forwards;
 }
+
+/* Group container (e.g. Kubernetes namespaces) */
+.group {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: color-mix(in srgb, var(--type-color) 5%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--type-color) 50%, var(--border-default));
+  border-radius: var(--radius-md);
+  pointer-events: all;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.group:hover {
+  border-color: color-mix(in srgb, var(--type-color) 75%, var(--border-strong));
+  background: color-mix(in srgb, var(--type-color) 8%, transparent);
+}
+
+.group.selected {
+  border-color: var(--accent-highlight);
+  border-style: solid;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px dashed color-mix(in srgb, var(--type-color) 30%, var(--border-default));
+  background: color-mix(in srgb, var(--type-color) 8%, transparent);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.groupName {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupType {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Swimlane Layout Styles ─────────────────────────────────────────── */
+
+/* Namespace lane header */
+.laneHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: var(--lane-header-h, 40px);
+  padding: 0 var(--space-4);
+  background: color-mix(in srgb, var(--type-k8s) 6%, var(--bg-secondary));
+  border: 1px solid color-mix(in srgb, var(--type-k8s) 20%, var(--border-default));
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.laneHeader:hover {
+  border-color: color-mix(in srgb, var(--type-k8s) 40%, var(--border-strong));
+  background: color-mix(in srgb, var(--type-k8s) 10%, var(--bg-secondary));
+}
+
+.laneHeader.selected {
+  border-color: var(--accent-highlight);
+  box-shadow: var(--node-selected-glow);
+}
+
+.laneHeaderName {
+  font-size: var(--text-base);
+  font-weight: var(--weight-namespace, 600);
+  color: var(--text-primary);
+  margin-right: auto;
+}
+
+.laneHeaderStats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.statChip {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  padding: 1px 6px;
+  background: var(--bg-interactive);
+  border-radius: var(--radius-sm);
+}
+
+.statChipGood {
+  composes: statChip;
+  color: var(--status-healthy);
+  background: var(--status-healthy-bg);
+}
+
+/* Swimlane card nodes (service, workload, pod) */
+.swimlaneNode {
+  width: 200px;
+}
+
+.swimCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-left: 2px solid color-mix(in srgb, var(--type-color) 40%, transparent);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.swimlaneNode:hover .swimCard {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.swimlaneNode.selected .swimCard {
+  border-color: var(--accent-highlight);
+  box-shadow: var(--node-selected-glow);
+}
+
+.swimCardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.swimCardBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: calc(8px + var(--space-2) + 18px + var(--space-2));
+}
+
+/* Badges and chips */
+.badge {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  background: var(--bg-interactive);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.mono {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.focalNumber {
+  font-size: var(--text-lg);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.focalDegraded {
+  color: var(--status-degraded);
+}
+
+.chipWarning {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--status-degraded);
+  padding: 1px 5px;
+  background: var(--status-degraded-bg);
+  border-radius: var(--radius-xs);
+}
+
+/* Phase chips */
+.phaseChip {
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.phaseRunning {
+  color: var(--status-healthy);
+  background: var(--status-healthy-bg);
+}
+
+.phasePending {
+  color: var(--status-degraded);
+  background: var(--status-degraded-bg);
+}
+
+.phaseError {
+  color: var(--status-unhealthy);
+  background: var(--status-unhealthy-bg);
+}
+
+/* ── Pulse animations ────────────────────────────────────────────────── */
+
+@keyframes healthPulse {
+  0%, 100% { box-shadow: var(--shadow-sm); }
+  50% { box-shadow: 0 0 12px var(--pulse-color, rgba(239, 68, 68, 0.3)); }
+}
+
+.pulseDegraded .swimCard,
+.pulseDegraded .card {
+  --pulse-color: rgba(245, 158, 11, 0.35);
+  animation: healthPulse var(--pulse-duration-degraded, 2s) var(--ease-smooth) infinite;
+}
+
+.pulseUnhealthy .swimCard,
+.pulseUnhealthy .card {
+  --pulse-color: rgba(239, 68, 68, 0.35);
+  animation: healthPulse var(--pulse-duration-unhealthy, 1.2s) var(--ease-smooth) infinite;
+}

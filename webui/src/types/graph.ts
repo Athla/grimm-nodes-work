@@ -17,7 +17,13 @@ export type NodeType =
   | 'mongodb'
   | 's3'
   | 'redis'
-  | 'http';
+  | 'http'
+  | 'namespace'
+  | 'deployment'
+  | 'statefulset'
+  | 'daemonset'
+  | 'pod'
+  | 'k8s_service';
 
 // Priority tiers for visual hierarchy
 export type PriorityTier = 'critical' | 'high' | 'medium' | 'low';

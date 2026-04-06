@@ -18,9 +18,10 @@ import '@xyflow/react/dist/style.css';
 
 import CustomNode, { type CustomNodeData } from './CustomNode';
 import CustomEdge, { type CustomEdgeData } from './CustomEdge';
+import { EdgeMarkerDefs } from './EdgeMarkerDefs';
 import { EmptyState } from '../ui';
 import type { Graph, GraphEdge } from '../../types';
-import { calculatePriority, countConnections, calculateHierarchicalLayout, calculateForceDirectedLayout, debounce } from '../../utils';
+import { calculatePriority, countConnections, calculateHierarchicalLayout, calculateForceDirectedLayout, calculateSwimlaneLayout, debounce } from '../../utils';
 import { useLayoutPersistence } from '../../hooks';
 import type { LayoutMode } from '../HeaderBar';
 import styles from './GraphCanvas.module.css';
@@ -58,6 +59,29 @@ function getConnectedNodeIds(nodeId: string, edges: GraphEdge[]) {
   return { sources, targets, all };
 }
 
+// Build a map of namespace ids for each node (used for cross-ns edge detection).
+function buildNodeNamespaceMap(graph: Graph): Map<string, string> {
+  const nsMap = new Map<string, string>();
+  for (const node of graph.nodes) {
+    if (node.type === 'namespace') {
+      nsMap.set(node.id, node.id);
+    } else if (node.parent) {
+      nsMap.set(node.id, node.parent);
+    }
+  }
+  return nsMap;
+}
+
+// Count how many routes_to edges originate from a node (for service "→ N pods" count).
+function countRoutesToTargets(nodeId: string, edges: Graph['edges']): number {
+  return edges.filter(e => e.source === nodeId && e.type === 'routes_to').length;
+}
+
+// Count children in a namespace by type.
+function countChildrenByType(nsId: string, nodes: Graph['nodes'], types: Set<string>): number {
+  return nodes.filter(n => n.parent === nsId && types.has(n.type)).length;
+}
+
 function computeLayout(
   graph: Graph,
   layoutMode: LayoutMode,
@@ -67,7 +91,115 @@ function computeLayout(
   nodes: Node<CustomNodeData>[];
   edges: Edge<CustomEdgeData>[];
 } {
-  // Calculate base layout positions (expensive)
+  const isSwimLane = layoutMode === 'swimlane';
+
+  // ── Swimlane layout ─────────────────────────────────────────────────
+  if (isSwimLane) {
+    const { positions: swimPositions, laneBounds } = calculateSwimlaneLayout(graph);
+    const nodeNsMap = buildNodeNamespaceMap(graph);
+
+    // Merge with saved pinned positions.
+    const finalPositions = new Map(swimPositions);
+    savedPositions.forEach((pos, nodeId) => {
+      if (pos.isPinned && swimPositions.has(nodeId)) {
+        finalPositions.set(nodeId, { x: pos.x, y: pos.y });
+      }
+    });
+
+    // Compute per-node enriched data.
+    const workloadTypes = new Set(['deployment', 'statefulset', 'daemonset']);
+    const podTypes = new Set(['pod']);
+
+    const nodes: Node<CustomNodeData>[] = graph.nodes.map(node => {
+      const connectionCount = countConnections(node.id, graph.edges);
+      const priority = calculatePriority(node, connectionCount);
+      const savedPos = savedPositions.get(node.id);
+      const position = finalPositions.get(node.id) || { x: 0, y: 0 };
+      const isGroup = node.type === 'namespace';
+
+      // Enriched metadata for per-type rendering.
+      const metadata = node.metadata ?? {};
+
+      // Namespace lane header: child counts.
+      let workloadCount: number | undefined;
+      let podCount: number | undefined;
+      let routesToCount: number | undefined;
+
+      if (isGroup) {
+        workloadCount = countChildrenByType(node.id, graph.nodes, workloadTypes);
+        podCount = countChildrenByType(node.id, graph.nodes, podTypes);
+      }
+
+      // Service: routes_to count.
+      if (node.type === 'k8s_service') {
+        routesToCount = countRoutesToTargets(node.id, graph.edges);
+      }
+
+      const rfNode: Node<CustomNodeData> = {
+        id: node.id,
+        type: 'custom',
+        position,
+        data: {
+          name: node.name,
+          type: node.type,
+          health: node.health,
+          priority,
+          connectionCount,
+          isConnected: undefined,
+          isSource: false,
+          isTarget: false,
+          isPinned: savedPos?.isPinned || false,
+          isGroup,
+          isSwimlane: true,
+          // K8s enriched data
+          metadata,
+          workloadCount,
+          podCount,
+          routesToCount,
+        },
+      };
+
+      // Namespace nodes in swimlane get lane dimensions as style.
+      if (isGroup) {
+        const bounds = laneBounds.get(node.id);
+        if (bounds) {
+          rfNode.style = { width: bounds.w, height: bounds.h };
+        }
+      }
+
+      return rfNode;
+    });
+
+    // Namespace (group) nodes first for React Flow z-order (they render behind).
+    nodes.sort((a, b) => {
+      const ag = a.data.isGroup ? 0 : 1;
+      const bg = b.data.isGroup ? 0 : 1;
+      return ag - bg;
+    });
+
+    const edges: Edge<CustomEdgeData>[] = graph.edges.map(edge => {
+      const sourceNs = nodeNsMap.get(edge.source);
+      const targetNs = nodeNsMap.get(edge.target);
+      const isCrossNamespace = sourceNs !== targetNs && sourceNs !== undefined && targetNs !== undefined;
+
+      return {
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        type: 'custom',
+        data: {
+          label: edge.label,
+          edgeType: edge.type,
+          isActive: undefined,
+          isCrossNamespace,
+        },
+      };
+    });
+
+    return { nodes, edges };
+  }
+
+  // ── Hierarchical / Force layout (existing) ──────────────────────────
   const basePositions = layoutMode === 'hierarchical'
     ? calculateHierarchicalLayout(graph)
     : calculateForceDirectedLayout(graph, viewportSize);
@@ -80,13 +212,65 @@ function computeLayout(
     }
   });
 
+  // Identify namespace groups (nodes whose metadata.group === true). For each
+  // group, collect children via the parent pointer, compute their bounding
+  // box, and lay the group out as a React Flow container.
+  const GROUP_PAD = 24;
+  const GROUP_HEADER_H = 36;
+  const CHILD_W = 220;
+  const CHILD_H = 64;
+  const groupChildren = new Map<string, string[]>();
+  for (const n of graph.nodes) {
+    if (!n.parent) continue;
+    if (!groupChildren.has(n.parent)) groupChildren.set(n.parent, []);
+    groupChildren.get(n.parent)!.push(n.id);
+  }
+  const groupBounds = new Map<string, { x: number; y: number; w: number; h: number }>();
+  for (const n of graph.nodes) {
+    if (!n.metadata?.group) continue;
+    const childIds = groupChildren.get(n.id) ?? [];
+    if (childIds.length === 0) continue;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const cid of childIds) {
+      const p = finalPositions.get(cid);
+      if (!p) continue;
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x + CHILD_W);
+      maxY = Math.max(maxY, p.y + CHILD_H);
+    }
+    if (!isFinite(minX)) continue;
+    groupBounds.set(n.id, {
+      x: minX - GROUP_PAD,
+      y: minY - GROUP_PAD - GROUP_HEADER_H,
+      w: maxX - minX + 2 * GROUP_PAD,
+      h: maxY - minY + 2 * GROUP_PAD + GROUP_HEADER_H,
+    });
+  }
+
   const nodes: Node<CustomNodeData>[] = graph.nodes.map(node => {
     const connectionCount = countConnections(node.id, graph.edges);
     const priority = calculatePriority(node, connectionCount);
-    const position = finalPositions.get(node.id) || { x: 0, y: 0 };
     const savedPos = savedPositions.get(node.id);
+    const isGroup = Boolean(node.metadata?.group);
+    const groupBox = isGroup ? groupBounds.get(node.id) : undefined;
 
-    return {
+    let position = finalPositions.get(node.id) || { x: 0, y: 0 };
+    let parentId: string | undefined;
+    let extent: 'parent' | undefined;
+
+    if (isGroup && groupBox) {
+      position = { x: groupBox.x, y: groupBox.y };
+    } else if (node.parent) {
+      const parentBox = groupBounds.get(node.parent);
+      if (parentBox) {
+        position = { x: position.x - parentBox.x, y: position.y - parentBox.y };
+        parentId = node.parent;
+        extent = 'parent';
+      }
+    }
+
+    const rfNode: Node<CustomNodeData> = {
       id: node.id,
       type: 'custom',
       position,
@@ -100,8 +284,25 @@ function computeLayout(
         isSource: false,
         isTarget: false,
         isPinned: savedPos?.isPinned || false,
+        isGroup,
+        metadata: node.metadata,
       },
     };
+    if (isGroup && groupBox) {
+      rfNode.style = { width: groupBox.w, height: groupBox.h };
+    }
+    if (parentId) {
+      rfNode.parentId = parentId;
+      rfNode.extent = extent;
+    }
+    return rfNode;
+  });
+
+  // Group nodes must precede their children in the array (React Flow requirement).
+  nodes.sort((a, b) => {
+    const ag = a.data.isGroup ? 0 : 1;
+    const bg = b.data.isGroup ? 0 : 1;
+    return ag - bg;
   });
 
   const edges: Edge<CustomEdgeData>[] = graph.edges.map(edge => ({
@@ -111,6 +312,7 @@ function computeLayout(
     type: 'custom',
     data: {
       label: edge.label,
+      edgeType: edge.type,
       isActive: undefined,
     },
   }));
@@ -357,6 +559,7 @@ function GraphCanvasInner({
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{ type: 'custom' }}
       >
+        <EdgeMarkerDefs />
         <Background
           variant={BackgroundVariant.Dots}
           gap={28}

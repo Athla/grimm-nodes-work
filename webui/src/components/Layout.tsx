@@ -1,11 +1,12 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { GraphCanvas } from './graph';
 import { NodeInspector, SearchOverlay, EdgeInspector } from './panels';
-import HeaderBar, { type Filters, type LayoutMode } from './HeaderBar';
+import HeaderBar, { type Filters, type LayoutMode, nodeSource, type NodeSource } from './HeaderBar';
 import { ErrorBoundary, EmptyState } from './ui';
 import { useWebSocket, useAppShortcuts } from '../hooks';
 import { useGraph as useGraphData } from '../api';
+import { hasNamespaces } from '../utils';
 import { MOCK_GRAPH } from '../data';
 import type { Graph, GraphEdge } from '../types';
 import styles from './Layout.module.css';
@@ -21,9 +22,11 @@ export default function Layout() {
   const [filters, setFilters] = useState<Filters>(() => {
     const typesParam = searchParams.get('types');
     const healthParam = searchParams.get('health');
+    const sourcesParam = searchParams.get('sources');
     return {
       types: typesParam ? typesParam.split(',').filter(Boolean) as Filters['types'] : [],
       health: healthParam ? healthParam.split(',').filter(Boolean) as Filters['health'] : [],
+      sources: sourcesParam ? sourcesParam.split(',').filter(Boolean) as NodeSource[] : [],
     };
   });
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(
@@ -43,23 +46,42 @@ export default function Layout() {
 
   const handleFilterChange = useCallback((newFilters: Filters) => {
     setFilters(newFilters);
-    const params = new URLSearchParams(searchParams);
-    if (newFilters.types.length > 0) {
-      params.set('types', newFilters.types.join(','));
-    } else {
-      params.delete('types');
-    }
-    if (newFilters.health.length > 0) {
-      params.set('health', newFilters.health.join(','));
-    } else {
-      params.delete('health');
-    }
-    setSearchParams(params, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev);
+      if (newFilters.types.length > 0) {
+        params.set('types', newFilters.types.join(','));
+      } else {
+        params.delete('types');
+      }
+      if (newFilters.health.length > 0) {
+        params.set('health', newFilters.health.join(','));
+      } else {
+        params.delete('health');
+      }
+      if (newFilters.sources.length > 0) {
+        params.set('sources', newFilters.sources.join(','));
+      } else {
+        params.delete('sources');
+      }
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const { data: apiGraph, isLoading, error, refetch } = useGraphData();
   const isMockData = !apiGraph?.nodes;
   const graph: Graph = isMockData ? MOCK_GRAPH : apiGraph;
+
+  // Auto-detect swimlane mode for k8s graphs when no explicit layout was saved.
+  const autoDetectedRef = useRef(false);
+  useEffect(() => {
+    if (autoDetectedRef.current || !graph?.nodes?.length) return;
+    const savedMode = localStorage.getItem('graph-layout-mode');
+    if (!savedMode && hasNamespaces(graph)) {
+      setLayoutMode('swimlane');
+      localStorage.setItem('graph-layout-mode', 'swimlane');
+    }
+    autoDetectedRef.current = true;
+  }, [graph]);
 
   const { status: wsStatus } = useWebSocket();
 
@@ -70,14 +92,16 @@ export default function Layout() {
         setSearchOpen(false);
       } else if (selectedEdge) {
         setSelectedEdge(null);
-        const params = new URLSearchParams(searchParams);
-        params.delete('edge');
-        setSearchParams(params, { replace: true });
+        setSearchParams(prev => {
+          const params = new URLSearchParams(prev);
+          params.delete('edge');
+          return params;
+        }, { replace: true });
       } else if (selectedNodeId) {
         setSelectedNodeId(null);
         navigate('/', { replace: true });
       }
-    }, [searchOpen, selectedEdge, selectedNodeId, navigate, searchParams, setSearchParams]),
+    }, [searchOpen, selectedEdge, selectedNodeId, navigate, setSearchParams]),
   });
 
   const handleNodeSelect = useCallback((nodeId: string | null) => {
@@ -100,10 +124,12 @@ export default function Layout() {
   const handleEdgeClick = useCallback((edge: GraphEdge) => {
     setSelectedEdge(edge);
     setSelectedNodeId(null);
-    const params = new URLSearchParams(searchParams);
-    params.set('edge', edge.id);
-    setSearchParams(params, { replace: true });
-  }, [searchParams, setSearchParams]);
+    setSearchParams(prev => {
+      const params = new URLSearchParams(prev);
+      params.set('edge', edge.id);
+      return params;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // Restore edge selection from URL on mount
   useEffect(() => {
@@ -118,11 +144,12 @@ export default function Layout() {
   // Filter graph for the canvas while keeping unfiltered graph for NodeInspector
   const filteredGraph = useMemo((): Graph | undefined => {
     if (!graph?.nodes) return undefined;
-    if (filters.types.length === 0 && filters.health.length === 0) return graph;
+    if (filters.types.length === 0 && filters.health.length === 0 && filters.sources.length === 0) return graph;
 
     const filteredNodes = graph.nodes.filter(node => {
       if (filters.types.length > 0 && !filters.types.includes(node.type)) return false;
       if (filters.health.length > 0 && !filters.health.includes(node.health)) return false;
+      if (filters.sources.length > 0 && !filters.sources.includes(nodeSource(node.type))) return false;
       return true;
     });
 
@@ -134,12 +161,12 @@ export default function Layout() {
     return { nodes: filteredNodes, edges: filteredEdges };
   }, [graph, filters]);
 
-  const hasActiveFilters = filters.types.length > 0 || filters.health.length > 0;
+  const hasActiveFilters = filters.types.length > 0 || filters.health.length > 0 || filters.sources.length > 0;
   const isFilteredEmpty = hasActiveFilters && filteredGraph?.nodes?.length === 0 && (graph?.nodes?.length ?? 0) > 0;
-  const activeFilterCount = filters.types.length + filters.health.length;
+  const activeFilterCount = filters.types.length + filters.health.length + filters.sources.length;
 
   const handleClearFilters = useCallback(() => {
-    handleFilterChange({ types: [], health: [] });
+    handleFilterChange({ types: [], health: [], sources: [] });
   }, [handleFilterChange]);
 
   return (
@@ -200,9 +227,11 @@ export default function Layout() {
         edge={selectedEdge}
         onClose={() => {
           setSelectedEdge(null);
-          const params = new URLSearchParams(searchParams);
-          params.delete('edge');
-          setSearchParams(params, { replace: true });
+          setSearchParams(prev => {
+            const params = new URLSearchParams(prev);
+            params.delete('edge');
+            return params;
+          }, { replace: true });
         }}
         graph={graph}
         onNodeSelect={handleNodeSelect}
