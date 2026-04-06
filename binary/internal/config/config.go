@@ -17,8 +17,16 @@ type DockerConfig struct {
 	IgnoreImages []string `yaml:"ignore_images,omitempty"`
 }
 
+type KubernetesConfig struct {
+	Enabled    *bool    `yaml:"enabled,omitempty"`    // nil = auto-detect
+	Kubeconfig string   `yaml:"kubeconfig,omitempty"` // path override; empty = default lookup
+	Context    string   `yaml:"context,omitempty"`    // empty = current context
+	Namespaces []string `yaml:"namespaces,omitempty"` // empty = all namespaces
+}
+
 type Config struct {
 	Docker      DockerConfig      `yaml:"docker,omitempty"`
+	Kubernetes  KubernetesConfig  `yaml:"kubernetes,omitempty"`
 	Connections []ConnectionEntry `yaml:"connections"`
 }
 

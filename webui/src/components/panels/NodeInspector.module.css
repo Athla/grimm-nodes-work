@@ -339,6 +339,39 @@
   font-family: var(--font-mono);
 }
 
+.tagList {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.tagKey {
+  color: var(--text-muted);
+}
+
+.tagSep {
+  color: var(--text-muted);
+  margin: 0 2px;
+}
+
+.tagVal {
+  color: var(--text-primary);
+}
+
 /* Connections */
 
 .connectionGroup {

@@ -46,3 +46,4 @@ export function countConnections(nodeId: string, edges: GraphEdge[]): number {
 
 export * from './graphTransform';
 export * from './forceDirectedLayout';
+export * from './swimlaneLayout';

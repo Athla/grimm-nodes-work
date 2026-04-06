@@ -6,6 +6,8 @@ export type CustomEdgeData = Record<string, unknown> & {
   label?: string;
   isActive?: boolean;
   isHighlighted?: boolean;
+  edgeType?: string;
+  isCrossNamespace?: boolean;
 };
 
 type CustomEdgeType = Edge<CustomEdgeData>;
@@ -100,14 +102,39 @@ function CustomEdge({
 
   const isActive = data?.isActive;
   const isHighlighted = data?.isHighlighted || selected;
+  const edgeType = data?.edgeType;
+  const isCrossNamespace = data?.isCrossNamespace;
+
+  // Two-tier edge weighting.
+  const isContains = edgeType === 'contains';
+  const isRoutesTo = edgeType === 'routes_to';
+
+  const edgeClass = [
+    styles.edge,
+    isContains ? styles.edgeContains : '',
+    isRoutesTo ? styles.edgeRoutesTo : '',
+    isCrossNamespace && isRoutesTo ? styles.edgeCrossNs : '',
+    isActive ? styles.active : '',
+    isHighlighted ? styles.highlighted : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <g className={styles.edgeGroup}>
       <BaseEdge
         id={id}
         path={edgePath}
-        className={`${styles.edge} ${isActive ? styles.active : ''} ${isHighlighted ? styles.highlighted : ''}`}
+        className={edgeClass}
       />
+
+      {/* Arrowhead path — uses shared markers defined in GraphCanvas */}
+      {isRoutesTo && (
+        <path
+          d={edgePath}
+          fill="none"
+          className={`${styles.edgeArrowPath} ${isCrossNamespace ? styles.edgeCrossNs : ''} ${isActive ? styles.active : ''}`}
+          markerEnd={`url(#${isCrossNamespace ? 'arrow-cross-ns' : 'arrow-routes-to'})`}
+        />
+      )}
 
       {/* Animated overlay for active edges */}
       {isActive && (

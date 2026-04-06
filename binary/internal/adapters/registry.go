@@ -23,7 +23,17 @@ type Registry interface {
 	DiscoverAll() (*graph.Graph, error)
 	HealthAll() []health.HealthMetrics
 	InvalidateCache()
+	// SetTopology replaces the set of pre-built nodes/edges contributed by a
+	// discoverer source (e.g. "kubernetes"). These are merged into DiscoverAll
+	// output alongside adapter-derived nodes. Calling with empty slices clears
+	// the source's contribution.
+	SetTopology(source string, n []nodes.Node, e []edges.Edge)
 	CloseAll() error
+}
+
+type topologySet struct {
+	nodes []nodes.Node
+	edges []edges.Edge
 }
 
 type registry struct {
@@ -31,6 +41,9 @@ type registry struct {
 	adapters map[string]Adapter
 	config   map[string]ConnectionConfig
 	types    map[string]string
+
+	topoMu   sync.RWMutex
+	topology map[string]topologySet
 
 	cacheMu     sync.RWMutex
 	cachedGraph *graph.Graph
@@ -51,22 +64,57 @@ func NewRegistry() Registry {
 		adapters:       make(map[string]Adapter),
 		config:         make(map[string]ConnectionConfig),
 		types:          make(map[string]string),
+		topology:       make(map[string]topologySet),
 		cacheTTL:       defaultCacheTTL,
 		healthCacheTTL: 10 * time.Second,
 	}
 }
 
-func (r *registry) Register(name string, connType string, adapter Adapter, config ConnectionConfig) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *registry) SetTopology(source string, n []nodes.Node, e []edges.Edge) {
+	r.topoMu.Lock()
+	if len(n) == 0 && len(e) == 0 {
+		delete(r.topology, source)
+	} else {
+		// Copy to guard against concurrent mutation of caller's slices.
+		nc := make([]nodes.Node, len(n))
+		copy(nc, n)
+		ec := make([]edges.Edge, len(e))
+		copy(ec, e)
+		r.topology[source] = topologySet{nodes: nc, edges: ec}
+	}
+	r.topoMu.Unlock()
+	r.InvalidateCache()
+}
 
+// snapshotTopology returns a flat copy of all topology contributions,
+// sorted by source for deterministic ordering.
+func (r *registry) snapshotTopology() ([]nodes.Node, []edges.Edge) {
+	r.topoMu.RLock()
+	defer r.topoMu.RUnlock()
+	if len(r.topology) == 0 {
+		return nil, nil
+	}
+	var allN []nodes.Node
+	var allE []edges.Edge
+	for _, ts := range r.topology {
+		allN = append(allN, ts.nodes...)
+		allE = append(allE, ts.edges...)
+	}
+	return allN, allE
+}
+
+func (r *registry) Register(name string, connType string, adapter Adapter, config ConnectionConfig) error {
+	// Connect outside the lock — this is a network call (DNS, TCP, auth) that
+	// can take seconds. Holding mu during Connect blocks all reads.
 	if err := adapter.Connect(config); err != nil {
 		return fmt.Errorf("registry: failed to connect adapter %q: %w", name, err)
 	}
 
+	r.mu.Lock()
 	r.adapters[name] = adapter
 	r.config[name] = config
 	r.types[name] = connType
+	r.mu.Unlock()
 
 	r.InvalidateCache()
 	return nil
@@ -196,6 +244,12 @@ func (r *registry) DiscoverAll() (*graph.Graph, error) {
 			allEdges = append(allEdges, edg...)
 		}
 
+		// Merge in topology contributions (e.g. Kubernetes) that don't
+		// go through the adapter path.
+		topoN, topoE := r.snapshotTopology()
+		allNodes = append(allNodes, topoN...)
+		allEdges = append(allEdges, topoE...)
+
 		g := &graph.Graph{Nodes: allNodes, Edges: allEdges}
 
 		// Store in cache
@@ -223,7 +277,7 @@ func (r *registry) HealthAll() []health.HealthMetrics {
 	}
 	r.healthCacheMu.RUnlock()
 
-	v, _, _ := r.healthSF.Do("health", func() (any, error) {
+	v, err, _ := r.healthSF.Do("health", func() (any, error) {
 		// Double-check cache inside singleflight
 		r.healthCacheMu.RLock()
 		if r.cachedHealth != nil && time.Since(r.healthCacheTime) < r.healthCacheTTL {
@@ -275,6 +329,13 @@ func (r *registry) HealthAll() []health.HealthMetrics {
 		return result, nil
 	})
 
+	if err != nil {
+		log.Printf("WARNING: health check failed: %v", err)
+		return nil
+	}
+	if v == nil {
+		return nil
+	}
 	return v.([]health.HealthMetrics)
 }
 
