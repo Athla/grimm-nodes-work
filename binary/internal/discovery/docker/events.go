@@ -62,16 +62,18 @@ func consumeEvents(ctx context.Context, msgCh <-chan events.Message, errCh <-cha
 			return ctx.Err()
 		case msg, ok := <-msgCh:
 			if !ok {
-				return fmt.Errorf("event stream closed")
+				return fmt.Errorf("event message stream closed")
 			}
 			log.Printf("Docker event: %s %s (container: %s)",
 				msg.Action, msg.Type, truncateID(msg.Actor.ID))
 			onChange()
-		case err := <-errCh:
-			if err != nil {
-				return err
+		case err, ok := <-errCh:
+			if !ok {
+				return fmt.Errorf("event error channel closed")
 			}
-			return fmt.Errorf("event stream closed")
+			if err != nil {
+				return fmt.Errorf("event stream error: %w", err)
+			}
 		}
 	}
 }

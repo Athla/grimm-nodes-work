@@ -160,6 +160,10 @@ func (d *Discovery) Close() error {
 		close(d.stopCh)
 		d.stopCh = nil
 	}
+	if d.factory != nil {
+		d.factory.Shutdown()
+		d.factory = nil
+	}
 	return nil
 }
 
