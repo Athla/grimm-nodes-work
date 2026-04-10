@@ -1,8 +1,8 @@
 <div align="center">
 
-# graph-info
+# graph-go
 
-**See your infrastructure. Instantly.**
+**See your infrastructure. Zero Config.**
 
 Point graph-info at your stack and get a live, interactive map of every database, table, service, and storage bucket — with real-time health monitoring.
 
