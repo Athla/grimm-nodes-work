@@ -5,6 +5,8 @@ import (
 	"sync"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
 	"github.com/guilherme-grimm/graph-go/internal/graph/nodes"
 )
@@ -37,7 +39,7 @@ func (s *stubAdapter) Health() (HealthMetrics, error) {
 func (s *stubAdapter) Close() error { return nil }
 
 func TestRegister_Success(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(zap.NewNop().Sugar())
 	a := &stubAdapter{}
 
 	err := reg.Register("test-db", "postgres", a, ConnectionConfig{"host": "localhost"})
@@ -64,7 +66,7 @@ func TestRegister_Success(t *testing.T) {
 }
 
 func TestRegister_ConnectFailure(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(zap.NewNop().Sugar())
 	a := &stubAdapter{connectErr: fmt.Errorf("connection refused")}
 
 	err := reg.Register("bad-db", "postgres", a, ConnectionConfig{})
@@ -83,7 +85,7 @@ func TestRegister_ConnectFailure(t *testing.T) {
 }
 
 func TestRegister_InvalidatesCache(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(zap.NewNop().Sugar())
 	a1 := &stubAdapter{
 		discoverN: []nodes.Node{{Id: "n1", Name: "first", Type: "postgres", Health: "healthy"}},
 	}
@@ -119,7 +121,7 @@ func TestRegister_InvalidatesCache(t *testing.T) {
 }
 
 func TestRegister_ConcurrentWithDiscoverAll(t *testing.T) {
-	reg := NewRegistry()
+	reg := NewRegistry(zap.NewNop().Sugar())
 
 	// Pre-register one adapter.
 	a0 := &stubAdapter{

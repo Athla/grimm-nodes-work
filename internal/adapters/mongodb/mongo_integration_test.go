@@ -12,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.uber.org/zap"
 
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 
@@ -70,7 +71,7 @@ func TestMain(m *testing.M) {
 
 	// Connect the adapter under test
 	testConfig = adapters.ConnectionConfig{"uri": uri}
-	testAdapter = New()
+	testAdapter = New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)

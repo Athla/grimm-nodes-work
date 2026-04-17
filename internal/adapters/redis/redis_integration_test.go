@@ -11,6 +11,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go/modules/redis"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
@@ -71,7 +72,7 @@ func TestMain(m *testing.M) {
 		"port": uint16(port.Int()),
 	}
 
-	testAdapter = New()
+	testAdapter = New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)
@@ -104,7 +105,7 @@ func TestConnect_URI(t *testing.T) {
 	port, _ := testConfig["port"].(uint16)
 	uri := fmt.Sprintf("redis://%s:%d", host, port)
 
-	a := New()
+	a := New(zap.NewNop().Sugar())
 	if err := a.Connect(adapters.ConnectionConfig{"uri": uri}); err != nil {
 		t.Fatalf("Connect with URI failed: %v", err)
 	}

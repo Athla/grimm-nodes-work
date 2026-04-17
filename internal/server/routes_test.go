@@ -46,7 +46,7 @@ func testGraph() *graph.Graph {
 }
 
 func newTestServer(reg adapters.Registry) *Server {
-	return &Server{registry: reg}
+	return &Server{registry: reg, logger: testLogger}
 }
 
 func TestGraphHandler(t *testing.T) {

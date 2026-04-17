@@ -9,6 +9,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
@@ -18,15 +19,19 @@ import (
 var _ adapters.Adapter = (*adapter)(nil)
 
 func init() {
-	adapters.RegisterFactory("s3", func() adapters.Adapter { return New() })
+	adapters.RegisterFactory("s3", func(l *zap.SugaredLogger) adapters.Adapter { return New(l) })
 }
 
 type adapter struct {
 	client *s3.Client
+	logger *zap.SugaredLogger
 }
 
-func New() *adapter {
-	return &adapter{}
+func New(logger *zap.SugaredLogger) *adapter {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+	return &adapter{logger: logger}
 }
 
 func (a *adapter) Connect(config adapters.ConnectionConfig) error {

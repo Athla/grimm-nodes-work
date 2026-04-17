@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"os"
 	"sort"
@@ -56,14 +55,14 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) graphHandler(w http.ResponseWriter, r *http.Request) {
 	g, err := s.registry.DiscoverAll()
 	if err != nil {
-		log.Printf("graphHandler: %v", err)
+		s.logger.Errorw("graphHandler discover failed", "err", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(map[string]any{"data": g}); err != nil {
-		log.Printf("graphHandler: encode error: %v", err)
+		s.logger.Errorw("graphHandler encode failed", "err", err)
 	}
 }
 
@@ -72,7 +71,7 @@ func (s *Server) nodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	g, err := s.registry.DiscoverAll()
 	if err != nil {
-		log.Printf("nodeHandler: %v", err)
+		s.logger.Errorw("nodeHandler discover failed", "err", err)
 		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -81,7 +80,7 @@ func (s *Server) nodeHandler(w http.ResponseWriter, r *http.Request) {
 		if node.Id == id {
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(map[string]any{"data": node}); err != nil {
-				log.Printf("nodeHandler: encode error: %v", err)
+				s.logger.Errorw("nodeHandler encode failed", "err", err)
 			}
 			return
 		}
@@ -109,7 +108,7 @@ func (s *Server) apiHealthHandler(w http.ResponseWriter, r *http.Request) {
 		"status":    status,
 		"timestamp": time.Now().Format(time.RFC3339),
 	}); err != nil {
-		log.Printf("apiHealthHandler: encode error: %v", err)
+		s.logger.Errorw("apiHealthHandler encode failed", "err", err)
 	}
 }
 
@@ -127,7 +126,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		OriginPatterns: patterns,
 	})
 	if err != nil {
-		log.Printf("could not open websocket: %v", err)
+		s.logger.Warnw("websocket accept failed", "err", err)
 		return
 	}
 
@@ -145,7 +144,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
 		// Get the current graph to map adapter health to actual node IDs
 		g, err := s.registry.DiscoverAll()
 		if err != nil {
-			log.Printf("websocket: discover error: %v", err)
+			s.logger.Warnw("websocket discover failed", "err", err)
 		}
 
 		// Detect graph topology changes (nodes added/removed)

@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/discovery"
@@ -41,6 +41,7 @@ type DockerDiscoveryConfig struct {
 type DockerDiscovery struct {
 	client *client.Client
 	cfg    DockerDiscoveryConfig
+	logger *zap.SugaredLogger
 }
 
 // Compile-time check that DockerDiscovery satisfies discovery.Discoverer.
@@ -51,9 +52,12 @@ func (d *DockerDiscovery) Name() string { return SourceName }
 
 // NewDockerDiscovery creates a new DockerDiscovery instance and verifies
 // connectivity to the daemon via Ping.
-func NewDockerDiscovery(cfg DockerDiscoveryConfig) (*DockerDiscovery, error) {
+func NewDockerDiscovery(cfg DockerDiscoveryConfig, logger *zap.SugaredLogger) (*DockerDiscovery, error) {
 	if cfg.Socket == "" {
 		cfg.Socket = "/var/run/docker.sock"
+	}
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
 	}
 
 	opts := []client.Opt{
@@ -72,7 +76,7 @@ func NewDockerDiscovery(cfg DockerDiscoveryConfig) (*DockerDiscovery, error) {
 		return nil, fmt.Errorf("discovery: failed to ping Docker daemon: %w", err)
 	}
 
-	return &DockerDiscovery{client: cli, cfg: cfg}, nil
+	return &DockerDiscovery{client: cli, cfg: cfg, logger: logger}, nil
 }
 
 // Close releases the Docker client resources.
@@ -126,14 +130,14 @@ func (d *DockerDiscovery) Discover(ctx context.Context) ([]discovery.ServiceInfo
 func (d *DockerDiscovery) Watch(ctx context.Context, onChange func()) error {
 	deb := discovery.NewDebouncer(onChange, 2*time.Second)
 	defer deb.Stop()
-	return watchEvents(ctx, d.client, deb.Trigger)
+	return watchEvents(ctx, d.client, deb.Trigger, d.logger)
 }
 
 func (d *DockerDiscovery) processContainer(ctx context.Context, ctr types.Container) (DiscoveredService, bool) {
 	// Inspect for full details (env vars, network settings)
 	inspect, err := d.client.ContainerInspect(ctx, ctr.ID)
 	if err != nil {
-		log.Printf("WARNING: failed to inspect container %s: %v", truncateID(ctr.ID), err)
+		d.logger.Warnw("docker: failed to inspect container", "container", truncateID(ctr.ID), "err", err)
 		return DiscoveredService{}, false
 	}
 

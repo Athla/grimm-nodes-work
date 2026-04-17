@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
 	"github.com/guilherme-grimm/graph-go/internal/graph/nodes"
@@ -14,7 +16,7 @@ import (
 var _ adapters.Adapter = (*adapter)(nil)
 
 func init() {
-	adapters.RegisterFactory("http", func() adapters.Adapter { return New() })
+	adapters.RegisterFactory("http", func(l *zap.SugaredLogger) adapters.Adapter { return New(l) })
 }
 
 type DependsOnEntry struct {
@@ -29,11 +31,16 @@ type adapter struct {
 	nodeType   string
 	name       string
 	dependsOn  []DependsOnEntry
+	logger     *zap.SugaredLogger
 }
 
-func New() *adapter {
+func New(logger *zap.SugaredLogger) *adapter {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
 	return &adapter{
 		client: &http.Client{Timeout: 5 * time.Second},
+		logger: logger,
 	}
 }
 

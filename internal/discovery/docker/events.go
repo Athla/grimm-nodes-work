@@ -3,18 +3,18 @@ package docker
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+	"go.uber.org/zap"
 )
 
 // watchEvents subscribes to Docker container start/stop/die events and
 // invokes onChange for each one. It reconnects with exponential backoff
 // and returns only when ctx is cancelled.
-func watchEvents(ctx context.Context, cli *client.Client, onChange func()) error {
+func watchEvents(ctx context.Context, cli *client.Client, onChange func(), logger *zap.SugaredLogger) error {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 
@@ -34,7 +34,7 @@ func watchEvents(ctx context.Context, cli *client.Client, onChange func()) error
 		})
 
 		start := time.Now()
-		err := consumeEvents(ctx, msgCh, errCh, onChange)
+		err := consumeEvents(ctx, msgCh, errCh, onChange, logger)
 		if time.Since(start) > 10*time.Second {
 			backoff = time.Second // only reset if stream was stable
 		}
@@ -42,7 +42,7 @@ func watchEvents(ctx context.Context, cli *client.Client, onChange func()) error
 			return nil
 		}
 
-		log.Printf("WARNING: Docker event stream error: %v (reconnecting in %v)", err, backoff)
+		logger.Warnw("docker event stream error", "err", err, "reconnect_in", backoff)
 		select {
 		case <-ctx.Done():
 			return nil
@@ -55,7 +55,7 @@ func watchEvents(ctx context.Context, cli *client.Client, onChange func()) error
 	}
 }
 
-func consumeEvents(ctx context.Context, msgCh <-chan events.Message, errCh <-chan error, onChange func()) error {
+func consumeEvents(ctx context.Context, msgCh <-chan events.Message, errCh <-chan error, onChange func(), logger *zap.SugaredLogger) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -64,8 +64,7 @@ func consumeEvents(ctx context.Context, msgCh <-chan events.Message, errCh <-cha
 			if !ok {
 				return fmt.Errorf("event stream closed")
 			}
-			log.Printf("Docker event: %s %s (container: %s)",
-				msg.Action, msg.Type, truncateID(msg.Actor.ID))
+			logger.Debugw("docker event", "action", msg.Action, "type", msg.Type, "container", truncateID(msg.Actor.ID))
 			onChange()
 		case err := <-errCh:
 			if err != nil {

@@ -3,11 +3,11 @@ package postgres
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/url"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
@@ -17,17 +17,21 @@ import (
 var _ adapters.Adapter = (*adapter)(nil)
 
 func init() {
-	adapters.RegisterFactory("postgres", func() adapters.Adapter { return New() })
+	adapters.RegisterFactory("postgres", func(l *zap.SugaredLogger) adapters.Adapter { return New(l) })
 }
 
 type adapter struct {
 	pool   *pgxpool.Pool
 	dsn    string
 	dbName string
+	logger *zap.SugaredLogger
 }
 
-func New() *adapter {
-	return &adapter{}
+func New(logger *zap.SugaredLogger) *adapter {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+	return &adapter{logger: logger}
 }
 
 func (a *adapter) Connect(config adapters.ConnectionConfig) error {
@@ -179,7 +183,7 @@ func (a *adapter) Health() (adapters.HealthMetrics, error) {
 	var activeConns int
 	if err := a.pool.QueryRow(ctx,
 		"SELECT count(*) FROM pg_stat_activity WHERE datname = $1", a.dbName).Scan(&activeConns); err != nil {
-		log.Printf("postgres: failed to query active connections: %v", err)
+		a.logger.Warnw("postgres: failed to query active connections", "err", err)
 	}
 
 	return adapters.HealthMetrics{

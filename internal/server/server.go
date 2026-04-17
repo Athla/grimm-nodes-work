@@ -3,12 +3,13 @@ package server
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/config"
@@ -31,32 +32,37 @@ import (
 type Server struct {
 	port     int
 	registry adapters.Registry
+	logger   *zap.SugaredLogger
 }
 
 // NewServer returns the HTTP server and a cleanup function that should
 // be called during graceful shutdown to close adapter connections.
-func NewServer(cfg *config.Config) (*http.Server, func()) {
+func NewServer(cfg *config.Config, logger *zap.SugaredLogger) (*http.Server, func()) {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+
 	port, err := strconv.Atoi(os.Getenv("PORT"))
 	if err != nil || port == 0 {
 		port = 8080
-		log.Printf("PORT not set or invalid, defaulting to %d", port)
+		logger.Infow("PORT unset, using default", "port", port)
 	}
 
-	reg := adapters.NewRegistry()
+	reg := adapters.NewRegistry(logger)
 
 	// Build the list of active discoverers. Each one is responsible for its
 	// own auto-detect (typically returning nil if its backing system is
 	// unavailable), so wiring here is uniform.
 	var discoverers []discovery.Discoverer
-	if dd := buildDockerDiscovery(cfg); dd != nil {
+	if dd := buildDockerDiscovery(cfg, logger); dd != nil {
 		discoverers = append(discoverers, dd)
 	}
-	if kd := buildKubernetesDiscovery(cfg); kd != nil {
+	if kd := buildKubernetesDiscovery(cfg, logger); kd != nil {
 		discoverers = append(discoverers, kd)
 	}
 
 	// Run Discover() in parallel across all active discoverers.
-	services := discoverAll(discoverers)
+	services := discoverAll(discoverers, logger)
 
 	// Merge with YAML config
 	var yamlEntries []discovery.YAMLEntry
@@ -74,7 +80,7 @@ func NewServer(cfg *config.Config) (*http.Server, func()) {
 
 	// Split: topology-bearing ServiceInfo (e.g. K8s resources) go directly
 	// into the registry's topology set; adapter-bound ones get registered.
-	applyServices(reg, services)
+	applyServices(reg, services, logger)
 
 	// Start a Watch() goroutine for each discoverer. Topology-oriented
 	// discoverers (those whose Discover returns ServiceInfo with Nodes)
@@ -83,18 +89,19 @@ func NewServer(cfg *config.Config) (*http.Server, func()) {
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 	for _, d := range discoverers {
 		d := d
-		onChange := buildOnChange(watchCtx, d, reg)
+		onChange := buildOnChange(watchCtx, d, reg, logger)
 		go func() {
 			if err := d.Watch(watchCtx, onChange); err != nil {
-				log.Printf("%s watch stopped: %v", d.Name(), err)
+				logger.Warnw("discoverer watch stopped", "discoverer", d.Name(), "err", err)
 			}
 		}()
-		log.Printf("%s event watcher started", d.Name())
+		logger.Infow("discoverer watch started", "discoverer", d.Name())
 	}
 
 	s := &Server{
 		port:     port,
 		registry: reg,
+		logger:   logger,
 	}
 
 	server := &http.Server{
@@ -109,11 +116,11 @@ func NewServer(cfg *config.Config) (*http.Server, func()) {
 		watchCancel()
 		for _, d := range discoverers {
 			if err := d.Close(); err != nil {
-				log.Printf("error closing %s discoverer: %v", d.Name(), err)
+				logger.Warnw("error closing discoverer", "discoverer", d.Name(), "err", err)
 			}
 		}
 		if err := reg.CloseAll(); err != nil {
-			log.Printf("error closing adapters: %v", err)
+			logger.Warnw("error closing adapters", "err", err)
 		}
 	}
 
@@ -124,7 +131,7 @@ func NewServer(cfg *config.Config) (*http.Server, func()) {
 // pre-built Nodes, like Kubernetes resources) and adapter-bound ones, then
 // pushes each into the registry appropriately. Topology entries are grouped
 // by Source so a later refresh can replace them atomically.
-func applyServices(reg adapters.Registry, services []discovery.ServiceInfo) {
+func applyServices(reg adapters.Registry, services []discovery.ServiceInfo, logger *zap.SugaredLogger) {
 	topologyBySource := make(map[string]*struct {
 		nodes []nodes.Node
 		edges []edges.Edge
@@ -144,20 +151,20 @@ func applyServices(reg adapters.Registry, services []discovery.ServiceInfo) {
 			continue
 		}
 
-		adapter, err := adapters.NewAdapter(svc.Type)
+		adapter, err := adapters.NewAdapter(svc.Type, logger)
 		if err != nil {
-			log.Printf("WARNING: %v (skipping %q)", err, svc.Name)
+			logger.Warnw("skipping service: unknown adapter type", "service", svc.Name, "type", svc.Type, "err", err)
 			continue
 		}
 		if err := reg.Register(svc.Name, svc.Type, adapter, svc.Config); err != nil {
-			log.Printf("WARNING: failed to register %q adapter: %v", svc.Name, err)
+			logger.Warnw("adapter register failed", "service", svc.Name, "type", svc.Type, "err", err)
 		} else {
-			log.Printf("%s adapter %q registered successfully", svc.Type, svc.Name)
+			logger.Infow("adapter registered", "service", svc.Name, "type", svc.Type)
 		}
 	}
 	for source, bucket := range topologyBySource {
 		reg.SetTopology(source, bucket.nodes, bucket.edges)
-		log.Printf("%s topology: %d nodes, %d edges", source, len(bucket.nodes), len(bucket.edges))
+		logger.Infow("topology applied", "source", source, "nodes", len(bucket.nodes), "edges", len(bucket.edges))
 	}
 }
 
@@ -165,11 +172,11 @@ func applyServices(reg adapters.Registry, services []discovery.ServiceInfo) {
 // discoverers that produce topology ServiceInfo, it re-reads their snapshot
 // and replaces the registry topology before invalidating caches. For pure
 // adapter discoverers, it just invalidates the cache.
-func buildOnChange(ctx context.Context, d discovery.Discoverer, reg adapters.Registry) func() {
+func buildOnChange(ctx context.Context, d discovery.Discoverer, reg adapters.Registry, logger *zap.SugaredLogger) func() {
 	return func() {
 		fresh, err := d.Discover(ctx)
 		if err != nil {
-			log.Printf("%s refresh failed: %v", d.Name(), err)
+			logger.Warnw("discoverer refresh failed", "discoverer", d.Name(), "err", err)
 			reg.InvalidateCache()
 			return
 		}
@@ -190,14 +197,14 @@ func buildOnChange(ctx context.Context, d discovery.Discoverer, reg adapters.Reg
 		}
 		// Re-apply all services so new containers get adapters registered
 		// (and removed containers are handled gracefully on next DiscoverAll).
-		applyServices(reg, fresh)
+		applyServices(reg, fresh, logger)
 	}
 }
 
 // discoverAll runs Discover() on every discoverer in parallel and returns
 // the concatenated ServiceInfo list. A failure from one discoverer is
 // logged but does not block the others.
-func discoverAll(discoverers []discovery.Discoverer) []discovery.ServiceInfo {
+func discoverAll(discoverers []discovery.Discoverer, logger *zap.SugaredLogger) []discovery.ServiceInfo {
 	if len(discoverers) == 0 {
 		return nil
 	}
@@ -214,10 +221,10 @@ func discoverAll(discoverers []discovery.Discoverer) []discovery.ServiceInfo {
 			defer wg.Done()
 			discovered, err := d.Discover(ctx)
 			if err != nil {
-				log.Printf("WARNING: %s discovery failed: %v", d.Name(), err)
+				logger.Warnw("discovery failed", "discoverer", d.Name(), "err", err)
 				return
 			}
-			log.Printf("%s discovery found %d services", d.Name(), len(discovered))
+			logger.Infow("discovery complete", "discoverer", d.Name(), "services", len(discovered))
 			results[i] = discovered
 		}()
 	}
@@ -230,7 +237,7 @@ func discoverAll(discoverers []discovery.Discoverer) []discovery.ServiceInfo {
 	return all
 }
 
-func buildDockerDiscovery(cfg *config.Config) *docker.DockerDiscovery {
+func buildDockerDiscovery(cfg *config.Config, logger *zap.SugaredLogger) *docker.DockerDiscovery {
 	if !shouldEnableDocker(cfg) {
 		return nil
 	}
@@ -250,16 +257,16 @@ func buildDockerDiscovery(cfg *config.Config) *docker.DockerDiscovery {
 		Socket:       socket,
 		Network:      network,
 		IgnoreImages: ignoreImages,
-	})
+	}, logger)
 	if err != nil {
-		log.Printf("WARNING: Docker discovery unavailable: %v (falling back to YAML-only)", err)
+		logger.Warnw("docker discovery unavailable, falling back to YAML-only", "err", err)
 		return nil
 	}
-	log.Println("Docker discovery enabled")
+	logger.Infow("docker discovery enabled")
 	return dd
 }
 
-func buildKubernetesDiscovery(cfg *config.Config) *kubernetes.Discovery {
+func buildKubernetesDiscovery(cfg *config.Config, logger *zap.SugaredLogger) *kubernetes.Discovery {
 	if cfg != nil && cfg.Kubernetes.Enabled != nil && !*cfg.Kubernetes.Enabled {
 		return nil
 	}
@@ -273,14 +280,14 @@ func buildKubernetesDiscovery(cfg *config.Config) *kubernetes.Discovery {
 
 	kd, err := kubernetes.New(k8sCfg)
 	if err != nil {
-		log.Printf("WARNING: Kubernetes discovery unavailable: %v", err)
+		logger.Warnw("kubernetes discovery unavailable", "err", err)
 		return nil
 	}
 	if kd == nil {
 		// No in-cluster config and no kubeconfig — silent skip.
 		return nil
 	}
-	log.Println("Kubernetes discovery enabled")
+	logger.Infow("kubernetes discovery enabled")
 	return kd
 }
 

@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
@@ -18,17 +18,21 @@ import (
 var _ adapters.Adapter = (*adapter)(nil)
 
 func init() {
-	adapters.RegisterFactory("mysql", func() adapters.Adapter { return New() })
+	adapters.RegisterFactory("mysql", func(l *zap.SugaredLogger) adapters.Adapter { return New(l) })
 }
 
 type adapter struct {
 	db     *sql.DB
 	dsn    string
 	dbName string
+	logger *zap.SugaredLogger
 }
 
-func New() *adapter {
-	return &adapter{}
+func New(logger *zap.SugaredLogger) *adapter {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+	return &adapter{logger: logger}
 }
 
 func (a *adapter) Connect(config adapters.ConnectionConfig) error {
@@ -160,7 +164,7 @@ func (a *adapter) Health() (adapters.HealthMetrics, error) {
 	if err := a.db.QueryRowContext(ctx,
 		"SELECT VARIABLE_VALUE FROM performance_schema.global_status WHERE VARIABLE_NAME = 'Threads_connected'",
 	).Scan(&threadsConnected); err != nil {
-		log.Printf("mysql: failed to query thread count: %v", err)
+		a.logger.Warnw("mysql: failed to query thread count", "err", err)
 	}
 
 	stats := a.db.Stats()

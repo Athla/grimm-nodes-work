@@ -16,6 +16,7 @@ import (
 	awss3 "github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/testcontainers/testcontainers-go/modules/minio"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
@@ -91,7 +92,7 @@ func TestMain(m *testing.M) {
 		"secret_access_key": "minioadmin",
 		"endpoint":          "http://" + endpoint,
 	}
-	testAdapter = New()
+	testAdapter = New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)

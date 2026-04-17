@@ -6,6 +6,8 @@ import (
 	"sync"
 	"testing"
 
+	"go.uber.org/zap"
+
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/discovery"
 	"github.com/guilherme-grimm/graph-go/internal/graph"
@@ -13,6 +15,8 @@ import (
 	"github.com/guilherme-grimm/graph-go/internal/graph/health"
 	"github.com/guilherme-grimm/graph-go/internal/graph/nodes"
 )
+
+var testLogger = zap.NewNop().Sugar()
 
 // trackingRegistry extends mockRegistry with call tracking for testing
 // applyServices and buildOnChange.
@@ -71,7 +75,7 @@ func (a *testAdapter) Close() error                                          { r
 
 func init() {
 	// Register a test adapter factory so applyServices can call NewAdapter.
-	adapters.RegisterFactory("test-type", func() adapters.Adapter { return &testAdapter{} })
+	adapters.RegisterFactory("test-type", func(_ *zap.SugaredLogger) adapters.Adapter { return &testAdapter{} })
 }
 
 // ── applyServices tests ──────────────────────────────────────────────
@@ -84,7 +88,7 @@ func TestApplyServices_AdapterOnly(t *testing.T) {
 		{Name: "db2", Type: "test-type", Source: "docker", Config: adapters.ConnectionConfig{}},
 	}
 
-	applyServices(reg, services)
+	applyServices(reg, services, testLogger)
 
 	if len(reg.registered) != 2 {
 		t.Errorf("expected 2 registrations, got %d", len(reg.registered))
@@ -107,7 +111,7 @@ func TestApplyServices_TopologyOnly(t *testing.T) {
 		},
 	}
 
-	applyServices(reg, services)
+	applyServices(reg, services, testLogger)
 
 	if len(reg.registered) != 0 {
 		t.Errorf("expected no registrations, got %d", len(reg.registered))
@@ -125,7 +129,7 @@ func TestApplyServices_Mixed(t *testing.T) {
 		{Name: "ns", Type: "namespace", Source: "kubernetes", Nodes: []nodes.Node{{Id: "n1"}}},
 	}
 
-	applyServices(reg, services)
+	applyServices(reg, services, testLogger)
 
 	if len(reg.registered) != 1 {
 		t.Errorf("expected 1 registration, got %d", len(reg.registered))
@@ -144,7 +148,7 @@ func TestApplyServices_UnknownAdapterType(t *testing.T) {
 	}
 
 	// Should not panic; unknown type is logged and skipped.
-	applyServices(reg, services)
+	applyServices(reg, services, testLogger)
 
 	if len(reg.registered) != 1 {
 		t.Errorf("expected 1 registration (unknown type skipped), got %d", len(reg.registered))
@@ -176,7 +180,7 @@ func TestBuildOnChange_TopologyDiscoverer(t *testing.T) {
 		},
 	}
 
-	onChange := buildOnChange(context.Background(), d, reg)
+	onChange := buildOnChange(context.Background(), d, reg, testLogger)
 	onChange()
 
 	if reg.topologyBySource["kubernetes"] != 2 {
@@ -193,7 +197,7 @@ func TestBuildOnChange_AdapterDiscoverer(t *testing.T) {
 		},
 	}
 
-	onChange := buildOnChange(context.Background(), d, reg)
+	onChange := buildOnChange(context.Background(), d, reg, testLogger)
 	onChange()
 
 	// MF-1 fix: buildOnChange should call applyServices for adapter discoverers.
@@ -209,7 +213,7 @@ func TestBuildOnChange_DiscoverError(t *testing.T) {
 		err:  fmt.Errorf("daemon not running"),
 	}
 
-	onChange := buildOnChange(context.Background(), d, reg)
+	onChange := buildOnChange(context.Background(), d, reg, testLogger)
 	onChange()
 
 	if reg.cacheInvalidated != 1 {

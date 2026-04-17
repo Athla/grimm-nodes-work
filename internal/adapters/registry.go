@@ -2,10 +2,10 @@ package adapters
 
 import (
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/guilherme-grimm/graph-go/internal/graph"
@@ -37,6 +37,7 @@ type topologySet struct {
 }
 
 type registry struct {
+	logger   *zap.SugaredLogger
 	mu       sync.RWMutex
 	adapters map[string]Adapter
 	config   map[string]ConnectionConfig
@@ -59,8 +60,12 @@ type registry struct {
 	healthSF        singleflight.Group
 }
 
-func NewRegistry() Registry {
+func NewRegistry(logger *zap.SugaredLogger) Registry {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
 	return &registry{
+		logger:         logger,
 		adapters:       make(map[string]Adapter),
 		config:         make(map[string]ConnectionConfig),
 		types:          make(map[string]string),
@@ -189,7 +194,7 @@ func (r *registry) DiscoverAll() (*graph.Graph, error) {
 		for _, e := range snapshot {
 			n, edg, err := e.adapter.Discover()
 			if err != nil {
-				log.Printf("WARNING: discover failed for %q: %v (skipping)", e.name, err)
+				r.logger.Warnw("adapter discover failed", "adapter", e.name, "err", err)
 				allNodes = append(allNodes, nodes.Node{
 					Id:       fmt.Sprintf("service-%s", e.name),
 					Type:     e.connType,
@@ -330,7 +335,7 @@ func (r *registry) HealthAll() []health.HealthMetrics {
 	})
 
 	if err != nil {
-		log.Printf("WARNING: health check failed: %v", err)
+		r.logger.Warnw("health check failed", "err", err)
 		return nil
 	}
 	if v == nil {

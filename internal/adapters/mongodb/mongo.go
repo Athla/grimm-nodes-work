@@ -7,6 +7,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
@@ -22,16 +23,20 @@ var systemDBs = map[string]bool{
 var _ adapters.Adapter = (*adapter)(nil)
 
 func init() {
-	adapters.RegisterFactory("mongodb", func() adapters.Adapter { return New() })
+	adapters.RegisterFactory("mongodb", func(l *zap.SugaredLogger) adapters.Adapter { return New(l) })
 }
 
 type adapter struct {
 	client *mongo.Client
 	uri    string
+	logger *zap.SugaredLogger
 }
 
-func New() *adapter {
-	return &adapter{}
+func New(logger *zap.SugaredLogger) *adapter {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+	return &adapter{logger: logger}
 }
 
 func (a *adapter) Connect(config adapters.ConnectionConfig) error {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
@@ -17,16 +18,20 @@ import (
 var _ adapters.Adapter = (*adapter)(nil)
 
 func init() {
-	adapters.RegisterFactory("elasticsearch", func() adapters.Adapter { return New() })
+	adapters.RegisterFactory("elasticsearch", func(l *zap.SugaredLogger) adapters.Adapter { return New(l) })
 }
 
 type adapter struct {
 	client   *elasticsearch.Client
 	endpoint string
+	logger   *zap.SugaredLogger
 }
 
-func New() *adapter {
-	return &adapter{}
+func New(logger *zap.SugaredLogger) *adapter {
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+	return &adapter{logger: logger}
 }
 
 func (a *adapter) Connect(config adapters.ConnectionConfig) error {

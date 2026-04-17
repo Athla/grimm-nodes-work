@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap"
+
 	"github.com/guilherme-grimm/graph-go/internal/graph/edges"
 	"github.com/guilherme-grimm/graph-go/internal/graph/nodes"
 )
@@ -34,7 +36,8 @@ type Adapter interface {
 }
 
 // AdapterConstructor is a factory function that creates a new Adapter instance.
-type AdapterConstructor func() Adapter
+// The logger is always non-nil; adapters may ignore it or name subloggers off it.
+type AdapterConstructor func(logger *zap.SugaredLogger) Adapter
 
 var (
 	factoryMu sync.RWMutex
@@ -50,12 +53,15 @@ func RegisterFactory(connType string, ctor AdapterConstructor) {
 }
 
 // NewAdapter creates a new adapter instance for the given connection type.
-func NewAdapter(connType string) (Adapter, error) {
+func NewAdapter(connType string, logger *zap.SugaredLogger) (Adapter, error) {
 	factoryMu.RLock()
 	defer factoryMu.RUnlock()
 	ctor, ok := factories[connType]
 	if !ok {
 		return nil, fmt.Errorf("unknown adapter type %q", connType)
 	}
-	return ctor(), nil
+	if logger == nil {
+		logger = zap.NewNop().Sugar()
+	}
+	return ctor(logger), nil
 }

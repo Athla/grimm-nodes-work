@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
@@ -77,7 +78,7 @@ func TestMain(m *testing.M) {
 
 	// Connect the adapter under test
 	testConfig = adapters.ConnectionConfig{"dsn": dsn}
-	testAdapter = New()
+	testAdapter = New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)

@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
@@ -177,7 +176,7 @@ func (e *ConnectionEntry) ToConnectionConfig() adapters.ConnectionConfig {
 			cfg["password"] = e.Password
 		}
 	default:
-		log.Printf("WARNING: ToConnectionConfig: unrecognized type %q for %q", e.Type, e.Name)
+		// Unknown types fall through; NewAdapter will surface the error at the call site.
 	}
 
 	return cfg
