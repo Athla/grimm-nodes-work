@@ -59,19 +59,19 @@ func (r *trackingRegistry) InvalidateCache() {
 	r.cacheInvalidated++
 }
 
-func (r *trackingRegistry) Get(string) (adapters.Adapter, bool)  { return nil, false }
-func (r *trackingRegistry) Names() []string                      { return nil }
-func (r *trackingRegistry) DiscoverAll() (*graph.Graph, error)   { return r.graph, nil }
-func (r *trackingRegistry) HealthAll() []health.HealthMetrics    { return r.health }
-func (r *trackingRegistry) CloseAll() error                      { return nil }
+func (r *trackingRegistry) Get(string) (adapters.Adapter, bool) { return nil, false }
+func (r *trackingRegistry) Names() []string                     { return nil }
+func (r *trackingRegistry) DiscoverAll() (*graph.Graph, error)  { return r.graph, nil }
+func (r *trackingRegistry) HealthAll() []health.HealthMetrics   { return r.health }
+func (r *trackingRegistry) CloseAll() error                     { return nil }
 
 // stubAdapter for factory registration.
 type testAdapter struct{}
 
-func (a *testAdapter) Connect(adapters.ConnectionConfig) error               { return nil }
-func (a *testAdapter) Discover() ([]nodes.Node, []edges.Edge, error)         { return nil, nil, nil }
-func (a *testAdapter) Health() (adapters.HealthMetrics, error)               { return nil, nil }
-func (a *testAdapter) Close() error                                          { return nil }
+func (a *testAdapter) Connect(adapters.ConnectionConfig) error       { return nil }
+func (a *testAdapter) Discover() ([]nodes.Node, []edges.Edge, error) { return nil, nil, nil }
+func (a *testAdapter) Health() (adapters.HealthMetrics, error)       { return nil, nil }
+func (a *testAdapter) Close() error                                  { return nil }
 
 func init() {
 	// Register a test adapter factory so applyServices can call NewAdapter.

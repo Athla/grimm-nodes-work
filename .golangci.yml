@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [errcheck]
+      - linters: [errcheck]
+        text: "Error return value of `\\(?[A-Za-z_.*]+\\)?\\.Close(Now)?` is not checked"
+      - linters: [errcheck]
+        text: "Error return value of `w\\.Write` is not checked"
+
+formatters:
+  enable:
+    - gofmt

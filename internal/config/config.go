@@ -10,9 +10,9 @@ import (
 )
 
 type DockerConfig struct {
-	Enabled      *bool    `yaml:"enabled,omitempty"`      // nil = auto-detect
-	Socket       string   `yaml:"socket,omitempty"`       // default: /var/run/docker.sock
-	Network      string   `yaml:"network,omitempty"`      // limit to specific network
+	Enabled      *bool    `yaml:"enabled,omitempty"` // nil = auto-detect
+	Socket       string   `yaml:"socket,omitempty"`  // default: /var/run/docker.sock
+	Network      string   `yaml:"network,omitempty"` // limit to specific network
 	IgnoreImages []string `yaml:"ignore_images,omitempty"`
 }
 

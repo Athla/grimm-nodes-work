@@ -170,13 +170,13 @@ func (a *adapter) Health() (adapters.HealthMetrics, error) {
 	}
 
 	return adapters.HealthMetrics{
-		"status":              status,
-		"cluster_name":        health.ClusterName,
-		"cluster_status":      health.Status,
-		"number_of_nodes":     health.NumberOfNodes,
-		"active_shards":       health.ActiveShards,
-		"relocating_shards":   health.RelocatingShards,
-		"unassigned_shards":   health.UnassignedShards,
+		"status":                status,
+		"cluster_name":          health.ClusterName,
+		"cluster_status":        health.Status,
+		"number_of_nodes":       health.NumberOfNodes,
+		"active_shards":         health.ActiveShards,
+		"relocating_shards":     health.RelocatingShards,
+		"unassigned_shards":     health.UnassignedShards,
 		"active_primary_shards": health.ActivePrimaryShards,
 	}, nil
 }

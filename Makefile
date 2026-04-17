@@ -1,7 +1,7 @@
 .PHONY: help install install-backend install-frontend \
 	dev run-backend run-frontend watch-backend \
 	build build-backend build-frontend \
-	test test-backend test-frontend clean \
+	test test-backend test-frontend lint clean \
 	docker-build docker-up docker-down docker-logs docker-clean
 
 .DEFAULT_GOAL := help
@@ -85,6 +85,11 @@ test-backend:
 test-frontend:
 	@echo "Running TypeScript type checking..."
 	@cd webui && npx tsc --noEmit
+
+## lint: Run golangci-lint on the backend
+lint:
+	@echo "Running golangci-lint..."
+	@golangci-lint run ./...
 
 ## clean: Remove build artifacts and dependencies
 clean:

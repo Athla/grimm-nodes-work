@@ -223,7 +223,7 @@ func (r *registry) DiscoverAll() (*graph.Graph, error) {
 			})
 
 			// Inject registry name into child metadata so WebSocket health
-		// matching works even when the adapter hardcodes its own type.
+			// matching works even when the adapter hardcodes its own type.
 			for i := range n {
 				if n[i].Metadata == nil {
 					n[i].Metadata = map[string]any{}

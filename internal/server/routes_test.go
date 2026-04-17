@@ -25,13 +25,13 @@ type mockRegistry struct {
 func (m *mockRegistry) Register(string, string, adapters.Adapter, adapters.ConnectionConfig) error {
 	return nil
 }
-func (m *mockRegistry) Get(string) (adapters.Adapter, bool) { return nil, false }
-func (m *mockRegistry) Names() []string                     { return nil }
-func (m *mockRegistry) DiscoverAll() (*graph.Graph, error)  { return m.graph, m.discErr }
-func (m *mockRegistry) HealthAll() []health.HealthMetrics   { return m.health }
-func (m *mockRegistry) InvalidateCache()                    {}
+func (m *mockRegistry) Get(string) (adapters.Adapter, bool)            { return nil, false }
+func (m *mockRegistry) Names() []string                                { return nil }
+func (m *mockRegistry) DiscoverAll() (*graph.Graph, error)             { return m.graph, m.discErr }
+func (m *mockRegistry) HealthAll() []health.HealthMetrics              { return m.health }
+func (m *mockRegistry) InvalidateCache()                               {}
 func (m *mockRegistry) SetTopology(string, []nodes.Node, []edges.Edge) {}
-func (m *mockRegistry) CloseAll() error                     { return nil }
+func (m *mockRegistry) CloseAll() error                                { return nil }
 
 func testGraph() *graph.Graph {
 	return &graph.Graph{

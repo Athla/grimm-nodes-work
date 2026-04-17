@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
@@ -133,7 +132,7 @@ func (d *DockerDiscovery) Watch(ctx context.Context, onChange func()) error {
 	return watchEvents(ctx, d.client, deb.Trigger, d.logger)
 }
 
-func (d *DockerDiscovery) processContainer(ctx context.Context, ctr types.Container) (DiscoveredService, bool) {
+func (d *DockerDiscovery) processContainer(ctx context.Context, ctr container.Summary) (DiscoveredService, bool) {
 	// Inspect for full details (env vars, network settings)
 	inspect, err := d.client.ContainerInspect(ctx, ctr.ID)
 	if err != nil {
@@ -205,7 +204,7 @@ func deriveContainerName(labels map[string]string, names []string) string {
 // resolveContainerHost returns the hostname for connecting to the container.
 // Prefers the Compose service name, then IP address on the specified network,
 // then the first available network IP.
-func resolveContainerHost(inspect types.ContainerJSON, network string) string {
+func resolveContainerHost(inspect container.InspectResponse, network string) string {
 	// Prefer Compose service name as hostname (Docker DNS)
 	if inspect.Config != nil && inspect.Config.Labels != nil {
 		if svc, ok := inspect.Config.Labels["com.docker.compose.service"]; ok && svc != "" {
@@ -218,7 +217,7 @@ func resolveContainerHost(inspect types.ContainerJSON, network string) string {
 
 // resolveContainerIP returns the container's IP address, preferring the
 // specified network if set.
-func resolveContainerIP(inspect types.ContainerJSON, network string) string {
+func resolveContainerIP(inspect container.InspectResponse, network string) string {
 	if inspect.NetworkSettings == nil || inspect.NetworkSettings.Networks == nil {
 		return "localhost"
 	}
