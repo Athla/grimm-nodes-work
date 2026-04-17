@@ -23,7 +23,13 @@ type KubernetesConfig struct {
 	Namespaces []string `yaml:"namespaces,omitempty"` // empty = all namespaces
 }
 
+type ServerConfig struct {
+	Port           int      `yaml:"port,omitempty"`
+	AllowedOrigins []string `yaml:"allowed_origins,omitempty"`
+}
+
 type Config struct {
+	Server      ServerConfig      `yaml:"server,omitempty"`
 	Docker      DockerConfig      `yaml:"docker,omitempty"`
 	Kubernetes  KubernetesConfig  `yaml:"kubernetes,omitempty"`
 	Connections []ConnectionEntry `yaml:"connections"`
@@ -85,9 +91,13 @@ func (cfg *Config) Validate() error {
 			if conn.URI == "" {
 				return fmt.Errorf("config: connections[%d] (%s): 'uri' is required for mongodb", i, conn.Name)
 			}
-		case "s3", "http":
+		case "s3":
+			if conn.Endpoint == "" && conn.Region == "" {
+				return fmt.Errorf("config: connections[%d] (%s): 'endpoint' or 'region' is required for s3", i, conn.Name)
+			}
+		case "http":
 			if conn.Endpoint == "" {
-				return fmt.Errorf("config: connections[%d] (%s): 'endpoint' is required for %s", i, conn.Name, conn.Type)
+				return fmt.Errorf("config: connections[%d] (%s): 'endpoint' is required for http", i, conn.Name)
 			}
 		case "mysql":
 			if conn.DSN == "" {

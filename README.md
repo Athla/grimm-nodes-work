@@ -4,16 +4,16 @@
 
 **See your infrastructure. Zero Config.**
 
-Point graph-info at your stack and get a live, interactive map of every database, table, service, and storage bucket — with real-time health monitoring.
+Point graph-go at your stack and get a live, interactive map of every database, table, service, and storage bucket — with real-time health monitoring.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-![graph-info demo](./docs/GraphGo.png)
+![graph-go demo](./docs/GraphGo.png)
 
 </div>
 
 ---
 
-graph-info **auto-discovers** your infrastructure by connecting to the Docker daemon, inspecting running containers, and probing databases and storage services. No manual inventory needed — it builds the graph for you.
+graph-go **auto-discovers** your infrastructure by connecting to the Docker daemon, inspecting running containers, and probing databases and storage services. No manual inventory needed — it builds the graph for you.
 
 | Capability | Details |
 |---|---|
@@ -36,7 +36,7 @@ graph-info **auto-discovers** your infrastructure by connecting to the Docker da
 
 ### Docker (recommended)
 
-Point graph-info at your existing infrastructure — no config file needed. Auto-discovery handles the rest:
+Point graph-go at your existing infrastructure — no config file needed. Auto-discovery handles the rest:
 
 ```bash
 # Backend — mount the Docker socket for auto-discovery
@@ -66,8 +66,8 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 ```bash
 # Example: Linux amd64
-curl -sL https://github.com/guilherme-grimm/graph-go/releases/latest/download/graph-info_linux_amd64.tar.gz | tar xz
-./graph-info
+curl -sL https://github.com/guilherme-grimm/graph-go/releases/latest/download/graph-go_linux_amd64.tar.gz | tar xz
+./graph-go
 ```
 
 The backend starts on `http://localhost:8080`. You'll need to serve the frontend separately (see [Local Development Setup](#local-development-setup)).
@@ -76,7 +76,7 @@ The backend starts on `http://localhost:8080`. You'll need to serve the frontend
 
 ## Quick Start (Docker Compose demo)
 
-To try graph-info with sample data (PostgreSQL, MongoDB, MinIO, and mock services):
+To try graph-go with sample data (PostgreSQL, MongoDB, MinIO, and mock services):
 
 ```bash
 git clone https://github.com/guilherme-grimm/graph-go.git
@@ -151,9 +151,9 @@ make test         # Run all tests
 
 ## Configuration
 
-**Auto-discovery is the preferred way to use graph-info.** Mount the Docker socket and/or run inside a Kubernetes cluster, and graph-info will automatically detect your infrastructure — no configuration needed. Both discoverers activate via auto-detection and run in parallel.
+**Auto-discovery is the preferred way to use graph-go.** Mount the Docker socket and/or run inside a Kubernetes cluster, and graph-go will automatically detect your infrastructure — no configuration needed. Both discoverers activate via auto-detection and run in parallel.
 
-The YAML config file (`conf/config.yaml`) is only needed for services that aren't reachable via Docker or Kubernetes, such as remote databases, managed cloud services, or external endpoints. When both are used, graph-info merges discovered services with the config file.
+The YAML config file (`conf/config.yaml`) is only needed for services that aren't reachable via Docker or Kubernetes, such as remote databases, managed cloud services, or external endpoints. When both are used, graph-go merges discovered services with the config file.
 
 See `conf/config.sample.yaml` for examples.
 
@@ -533,7 +533,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines 
 - Security testing without explicit permission
 - Accessing systems you don't own or control
 
-Users are responsible for ensuring they have proper authorization before connecting graph-info to any infrastructure.
+Users are responsible for ensuring they have proper authorization before connecting graph-go to any infrastructure.
 
 ---
 

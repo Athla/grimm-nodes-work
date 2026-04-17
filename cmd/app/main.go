@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -75,6 +77,8 @@ func runServe(configPath, logLevel, logFormat string) error {
 		cfg = &config.Config{}
 	}
 
+	applyServerEnv(&cfg.Server)
+
 	srv, cleanup := server.NewServer(cfg, logger)
 	done := make(chan bool, 1)
 
@@ -142,4 +146,23 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// applyServerEnv lets env vars override YAML config. Only populates zero fields
+// so an explicit YAML value always wins over env.
+func applyServerEnv(s *config.ServerConfig) {
+	if s.Port == 0 {
+		if p, err := strconv.Atoi(os.Getenv("PORT")); err == nil && p > 0 {
+			s.Port = p
+		}
+	}
+	if len(s.AllowedOrigins) == 0 {
+		if v := os.Getenv("ALLOWED_ORIGINS"); v != "" {
+			parts := strings.Split(v, ",")
+			for i := range parts {
+				parts[i] = strings.TrimSpace(parts[i])
+			}
+			s.AllowedOrigins = parts
+		}
+	}
 }

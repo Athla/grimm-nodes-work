@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -30,9 +29,10 @@ import (
 )
 
 type Server struct {
-	port     int
-	registry adapters.Registry
-	logger   *zap.SugaredLogger
+	port           int
+	allowedOrigins []string
+	registry       adapters.Registry
+	logger         *zap.SugaredLogger
 }
 
 // NewServer returns the HTTP server and a cleanup function that should
@@ -41,11 +41,17 @@ func NewServer(cfg *config.Config, logger *zap.SugaredLogger) (*http.Server, fun
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
 	}
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
 
-	port, err := strconv.Atoi(os.Getenv("PORT"))
-	if err != nil || port == 0 {
+	port := cfg.Server.Port
+	if port == 0 {
 		port = 8080
-		logger.Infow("PORT unset, using default", "port", port)
+	}
+	allowedOrigins := cfg.Server.AllowedOrigins
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
 	}
 
 	reg := adapters.NewRegistry(logger)
@@ -65,15 +71,12 @@ func NewServer(cfg *config.Config, logger *zap.SugaredLogger) (*http.Server, fun
 	services := discoverAll(discoverers, logger)
 
 	// Merge with YAML config
-	var yamlEntries []discovery.YAMLEntry
-	if cfg != nil {
-		yamlEntries = make([]discovery.YAMLEntry, len(cfg.Connections))
-		for i, entry := range cfg.Connections {
-			yamlEntries[i] = discovery.YAMLEntry{
-				Name:   entry.Name,
-				Type:   entry.Type,
-				Config: entry.ToConnectionConfig(),
-			}
+	yamlEntries := make([]discovery.YAMLEntry, len(cfg.Connections))
+	for i, entry := range cfg.Connections {
+		yamlEntries[i] = discovery.YAMLEntry{
+			Name:   entry.Name,
+			Type:   entry.Type,
+			Config: entry.ToConnectionConfig(),
 		}
 	}
 	services = discovery.MergeWithYAML(services, yamlEntries)
@@ -99,9 +102,10 @@ func NewServer(cfg *config.Config, logger *zap.SugaredLogger) (*http.Server, fun
 	}
 
 	s := &Server{
-		port:     port,
-		registry: reg,
-		logger:   logger,
+		port:           port,
+		allowedOrigins: allowedOrigins,
+		registry:       reg,
+		logger:         logger,
 	}
 
 	server := &http.Server{
@@ -243,15 +247,11 @@ func buildDockerDiscovery(cfg *config.Config, logger *zap.SugaredLogger) *docker
 	}
 
 	socket := "/var/run/docker.sock"
-	network := ""
-	var ignoreImages []string
-	if cfg != nil {
-		if cfg.Docker.Socket != "" {
-			socket = cfg.Docker.Socket
-		}
-		network = cfg.Docker.Network
-		ignoreImages = cfg.Docker.IgnoreImages
+	if cfg.Docker.Socket != "" {
+		socket = cfg.Docker.Socket
 	}
+	network := cfg.Docker.Network
+	ignoreImages := cfg.Docker.IgnoreImages
 
 	dd, err := docker.NewDockerDiscovery(docker.DockerDiscoveryConfig{
 		Socket:       socket,
@@ -267,15 +267,14 @@ func buildDockerDiscovery(cfg *config.Config, logger *zap.SugaredLogger) *docker
 }
 
 func buildKubernetesDiscovery(cfg *config.Config, logger *zap.SugaredLogger) *kubernetes.Discovery {
-	if cfg != nil && cfg.Kubernetes.Enabled != nil && !*cfg.Kubernetes.Enabled {
+	if cfg.Kubernetes.Enabled != nil && !*cfg.Kubernetes.Enabled {
 		return nil
 	}
 
-	k8sCfg := kubernetes.Config{}
-	if cfg != nil {
-		k8sCfg.KubeconfigPath = cfg.Kubernetes.Kubeconfig
-		k8sCfg.Context = cfg.Kubernetes.Context
-		k8sCfg.Namespaces = cfg.Kubernetes.Namespaces
+	k8sCfg := kubernetes.Config{
+		KubeconfigPath: cfg.Kubernetes.Kubeconfig,
+		Context:        cfg.Kubernetes.Context,
+		Namespaces:     cfg.Kubernetes.Namespaces,
 	}
 
 	kd, err := kubernetes.New(k8sCfg)
@@ -295,13 +294,13 @@ func buildKubernetesDiscovery(cfg *config.Config, logger *zap.SugaredLogger) *ku
 // If cfg.Docker.Enabled is explicitly set, use that. Otherwise auto-detect
 // by checking if the Docker socket exists.
 func shouldEnableDocker(cfg *config.Config) bool {
-	if cfg != nil && cfg.Docker.Enabled != nil {
+	if cfg.Docker.Enabled != nil {
 		return *cfg.Docker.Enabled
 	}
 
 	// Auto-detect: check if Docker socket exists
 	socket := "/var/run/docker.sock"
-	if cfg != nil && cfg.Docker.Socket != "" {
+	if cfg.Docker.Socket != "" {
 		socket = cfg.Docker.Socket
 	}
 

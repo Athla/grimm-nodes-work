@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 	"sort"
 	"strings"
 	"time"
@@ -33,7 +32,12 @@ func (s *Server) RegisterRoutes() http.Handler {
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if origin := r.Header.Get("Origin"); origin != "" {
+			if allowed, ok := matchOrigin(origin, s.allowedOrigins); ok {
+				w.Header().Set("Access-Control-Allow-Origin", allowed)
+				w.Header().Set("Vary", "Origin")
+			}
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type")
 		w.Header().Set("Access-Control-Allow-Credentials", "false")
@@ -45,6 +49,42 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// matchOrigin returns the value to send in Access-Control-Allow-Origin.
+// A patterns entry of "*" matches any origin and echoes "*".
+func matchOrigin(origin string, patterns []string) (string, bool) {
+	for _, p := range patterns {
+		if p == "*" {
+			return "*", true
+		}
+		if p == origin {
+			return origin, true
+		}
+	}
+	return "", false
+}
+
+// wsPatterns converts CORS-style origins (http://host:port) into coder/websocket
+// OriginPatterns (host:port). Preserves "*" and bare host patterns unchanged.
+func wsPatterns(origins []string) []string {
+	if len(origins) == 0 {
+		return []string{"*"}
+	}
+	out := make([]string, 0, len(origins))
+	for _, o := range origins {
+		if o == "*" {
+			out = append(out, "*")
+			continue
+		}
+		host := o
+		if i := strings.Index(host, "://"); i >= 0 {
+			host = host[i+3:]
+		}
+		host = strings.TrimSuffix(host, "/")
+		out = append(out, host)
+	}
+	return out
 }
 
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,14 +153,7 @@ func (s *Server) apiHealthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) websocketHandler(w http.ResponseWriter, r *http.Request) {
-	origins := os.Getenv("WS_ALLOWED_ORIGINS")
-	if origins == "" {
-		origins = "*"
-	}
-	patterns := strings.Split(origins, ",")
-	for i := range patterns {
-		patterns[i] = strings.TrimSpace(patterns[i])
-	}
+	patterns := wsPatterns(s.allowedOrigins)
 
 	socket, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: patterns,
