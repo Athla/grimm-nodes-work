@@ -1,5 +1,6 @@
 .PHONY: help install install-backend install-frontend \
-	dev run-backend run-frontend build build-backend build-frontend \
+	dev run-backend run-frontend watch-backend \
+	build build-backend build-frontend \
 	test test-backend test-frontend clean \
 	docker-build docker-up docker-down docker-logs docker-clean
 
@@ -17,7 +18,7 @@ install: install-backend install-frontend
 ## install-backend: Install Go dependencies
 install-backend:
 	@echo "Installing Go dependencies..."
-	@cd binary && go mod download && go mod tidy
+	@go mod download && go mod tidy
 
 ## install-frontend: Install npm dependencies
 install-frontend:
@@ -37,7 +38,20 @@ dev:
 ## run-backend: Run the backend server
 run-backend:
 	@echo "Starting backend server on port 8080..."
-	@cd binary && go run ./cmd/app/main.go
+	@go run ./cmd/app/main.go
+
+## watch-backend: Run backend with air hot-reload (installs air if missing)
+watch-backend:
+	@if command -v air > /dev/null; then \
+		air; \
+	else \
+		read -p "'air' is not installed. Install it now? [Y/n] " choice; \
+		if [ "$$choice" != "n" ] && [ "$$choice" != "N" ]; then \
+			go install github.com/air-verse/air@latest && air; \
+		else \
+			echo "Skipping."; exit 1; \
+		fi; \
+	fi
 
 ## run-frontend: Run the frontend dev server
 run-frontend:
@@ -50,8 +64,8 @@ build: build-backend build-frontend
 ## build-backend: Build the backend binary
 build-backend:
 	@echo "Building backend..."
-	@cd binary && go build -o ../bin/graph-info ./cmd/app/main.go
-	@echo "Backend binary created at: bin/graph-info"
+	@go build -o bin/graph-go ./cmd/app/main.go
+	@echo "Backend binary created at: bin/graph-go"
 
 ## build-frontend: Build the frontend for production
 build-frontend:
@@ -65,7 +79,7 @@ test: test-backend test-frontend
 ## test-backend: Run Go tests
 test-backend:
 	@echo "Running Go tests..."
-	@cd binary && go test ./... -v -count=1
+	@go test ./... -v -count=1
 
 ## test-frontend: Run TypeScript type checking
 test-frontend:
@@ -76,7 +90,7 @@ test-frontend:
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf bin/
-	@rm -rf binary/bin/
+	@rm -rf tmp/
 	@rm -rf webui/dist/
 	@rm -rf webui/node_modules/
 	@echo "✓ Clean complete"

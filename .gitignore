@@ -7,7 +7,21 @@ node_modules/
 
 # Build output
 dist/
-binary/bin/
+bin/
+main
+app
+tmp/
+build-errors.log
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
 
 # Logs
 *.log
