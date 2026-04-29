@@ -15,14 +15,46 @@ This project is intended for legitimate infrastructure visualization and monitor
 
 ## Getting Started
 
-See [README.md](README.md#local-development-setup) for prerequisites, installation, and running locally.
+### Prerequisites
+- Go 1.25.6+
+- Node.js 24+ (or Bun)
+- Docker (required for integration tests)
 
 ### Fork and Clone
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/graph-info.git
-cd graph-info
-git remote add upstream https://github.com/original/graph-info.git
+git clone https://github.com/YOUR_USERNAME/graph-go.git
+cd graph-go
+git remote add upstream https://github.com/guilherme-grimm/graph-go.git
+```
+
+### Local Development Setup
+
+Run backend and frontend in separate processes — Vite proxies `/api`, `/websocket`, and `/health` to the backend on :8080, so the SPA at :5173 hot-reloads against a live API.
+
+```bash
+make install    # Go modules + npm deps
+make dev        # backend on :8080, Vite dev server on :5173
+```
+
+Open `http://localhost:5173` for the dev UI.
+
+For a single-process check that mirrors production (SPA embedded in the binary):
+
+```bash
+make build      # builds frontend bundle, embeds it, builds binary
+./bin/graph-go  # serves UI + API on :8080
+```
+
+### Make Targets
+
+```
+make install            # Install all dependencies
+make dev                # Run backend + Vite dev server concurrently
+make build              # Build the embedded production binary
+make build-backend-only # Skip frontend rebuild (fast Go iteration)
+make test               # Unit tests + TS type-check
+make lint               # golangci-lint
 ```
 
 ---
