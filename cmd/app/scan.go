@@ -13,8 +13,6 @@ import (
 
 func newScanCmd() *cobra.Command {
 	var (
-		configPath string
-		logLevel   string
 		format     string
 		withHealth bool
 		pretty     bool
@@ -23,15 +21,16 @@ func newScanCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:          "scan",
 		Short:        "Run discovery once and emit the graph to stdout.",
-		Long:         "scan runs one discovery pass against Docker, Kubernetes, and any YAML-declared services, then writes the discovered graph to stdout and exits. Logs go to stderr as JSON.",
+		Long:         "scan runs one discovery pass against Docker, Kubernetes, and any YAML-declared services, then writes the discovered graph to stdout and exits. Logs go to stderr — combine with --log-level=warn (or LOG_LEVEL=warn) for quieter stderr when piping.",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runScan(configPath, logLevel, format, withHealth, pretty)
+			configPath, _ := cmd.Flags().GetString("config")
+			logLevel, _ := cmd.Flags().GetString("log-level")
+			logFormat, _ := cmd.Flags().GetString("log-format")
+			return runScan(configPath, logLevel, logFormat, format, withHealth, pretty)
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath(), "path to config file (optional — auto-discovery by default)")
-	cmd.Flags().StringVar(&logLevel, "log-level", envOr("LOG_LEVEL", "warn"), "log level: debug|info|warn|error")
 	cmd.Flags().StringVar(&format, "format", "json", "output format (supported: json)")
 	cmd.Flags().BoolVar(&withHealth, "health", false, "run one health sweep and merge adapter status onto nodes")
 	cmd.Flags().BoolVar(&pretty, "pretty", false, "indent output for humans (default: compact)")
@@ -39,12 +38,12 @@ func newScanCmd() *cobra.Command {
 	return cmd
 }
 
-func runScan(configPath, logLevel, format string, withHealth, pretty bool) error {
+func runScan(configPath, logLevel, logFormat, format string, withHealth, pretty bool) error {
 	if format != "json" {
 		return fmt.Errorf("unsupported format %q (supported: json)", format)
 	}
 
-	logger, err := logging.New(logLevel, "json")
+	logger, err := logging.New(logLevel, logFormat)
 	if err != nil {
 		return err
 	}
