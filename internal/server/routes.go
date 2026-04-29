@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/mux"
 
 	"github.com/guilherme-grimm/graph-go/internal/graph/health"
+	"github.com/guilherme-grimm/graph-go/internal/webui"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
@@ -26,6 +27,10 @@ func (s *Server) RegisterRoutes() http.Handler {
 	r.HandleFunc("/api/health", s.apiHealthHandler).Methods("GET")
 
 	r.HandleFunc("/websocket", s.websocketHandler)
+
+	// SPA: serve embedded frontend on any unmatched path. Registered last so
+	// API and WebSocket routes take precedence.
+	r.PathPrefix("/").Handler(webui.Handler())
 
 	return r
 }

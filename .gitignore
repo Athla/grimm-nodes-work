@@ -6,8 +6,10 @@ config.yaml
 node_modules/
 
 # Build output
-dist/
+/webui/dist/
 bin/
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep
 main
 app
 tmp/
