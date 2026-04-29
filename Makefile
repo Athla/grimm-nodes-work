@@ -64,16 +64,21 @@ run-frontend:
 ## build: Build the single self-contained binary (frontend bundle embedded)
 build: build-backend
 
+VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT     ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS    := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILD_DATE)
+
 ## build-backend: Build the backend binary with the SPA bundle embedded
 build-backend: build-frontend
 	@echo "Building backend..."
-	@go build -o bin/graph-go ./cmd/app/main.go
+	@go build -ldflags "$(LDFLAGS)" -o bin/graph-go ./cmd/app
 	@echo "Backend binary created at: bin/graph-go"
 
 ## build-backend-only: Build backend without rebuilding the frontend (fast iteration)
 build-backend-only:
 	@echo "Building backend (skipping frontend bundle)..."
-	@go build -o bin/graph-go ./cmd/app/main.go
+	@go build -ldflags "$(LDFLAGS)" -o bin/graph-go ./cmd/app
 	@echo "Backend binary created at: bin/graph-go"
 
 ## build-frontend: Build the frontend bundle and stage it for embed
