@@ -57,6 +57,8 @@ func newRootCmd() *cobra.Command {
 	// Local: --health-check is a Docker HEALTHCHECK shim, not a user surface.
 	cmd.Flags().BoolVar(&healthCheck, "health-check", false, "hit the local /health endpoint and exit 0/1 (for Docker HEALTHCHECK)")
 
+	cmd.AddCommand(newServeCmd())
+
 	return cmd
 }
 
