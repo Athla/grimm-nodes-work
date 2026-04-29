@@ -32,235 +32,78 @@ graph-go **auto-discovers** your infrastructure by connecting to the Docker daem
 
 ---
 
-## Installation
+## Quick Start — try it in 30 seconds
 
-### Docker (recommended)
-
-Point graph-go at your existing infrastructure — no config file needed. Auto-discovery handles the rest:
-
-```bash
-# Backend — mount the Docker socket for auto-discovery
-docker run -d -p 8080:8080 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  ghcr.io/guilherme-grimm/graph-go-backend:latest
-
-# Frontend
-docker run -d -p 3000:80 \
-  ghcr.io/guilherme-grimm/graph-go-frontend:latest
-```
-
-Open `http://localhost:3000` and your infrastructure graph will appear automatically.
-
-To add connections that aren't in Docker (e.g., remote databases, external S3), mount a config file:
-
-```bash
-docker run -d -p 8080:8080 \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v ./conf/config.yaml:/app/conf/config.yaml \
-  ghcr.io/guilherme-grimm/graph-go-backend:latest
-```
-
-### Pre-built binaries
-
-Download the latest release for your platform from [GitHub Releases](https://github.com/guilherme-grimm/graph-go/releases):
-
-```bash
-# Example: Linux amd64
-curl -sL https://github.com/guilherme-grimm/graph-go/releases/latest/download/graph-go_linux_amd64.tar.gz | tar xz
-./graph-go
-```
-
-The backend starts on `http://localhost:8080`. You'll need to serve the frontend separately (see [Local Development Setup](#local-development-setup)).
-
----
-
-## Quick Start (Docker Compose demo)
-
-To try graph-go with sample data (PostgreSQL, MongoDB, MinIO, and mock services):
+Boots a seeded stack (Postgres, Mongo, MinIO, mock services) so the graph populates immediately:
 
 ```bash
 git clone https://github.com/guilherme-grimm/graph-go.git
 cd graph-go
 make docker-up
-
-# Services will be available at:
-# - Frontend:      http://localhost:3000
-# - Backend API:   http://localhost:8080
-# - MinIO Console: http://localhost:9001
 ```
 
-**To stop:**
-```bash
-make docker-down
-```
-
-**To rebuild after code changes:**
-```bash
-make docker-build && make docker-up
-```
+Open **http://localhost:8080** — single URL, single port. Stop with `make docker-down`.
 
 ---
 
-## Local Development Setup
+## Run against your own stack
 
-### Prerequisites
-- Go 1.25.6+
-- Node.js 24+ (or Bun)
-- Docker (required for integration tests)
-
-### Backend Setup
+One container, one port. Mount the Docker socket read-only and graph-go auto-discovers everything running on the host:
 
 ```bash
-# Install Go dependencies
-cd binary
-go mod download
-
-# Copy sample config and edit connection strings
-cp ../conf/config.sample.yaml ../conf/config.yaml
-# Edit conf/config.yaml with your connection details
-
-# Run the backend
-go run ./cmd/app/main.go
+docker run -d -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  ghcr.io/guilherme-grimm/graph-go:latest
 ```
 
-The backend API will start on `http://localhost:8080`.
+> graph-go only reads from the Docker socket. The `:ro` flag enforces this — keep it.
 
-### Frontend Setup
+Open **http://localhost:8080**. Auto-discovery handles Docker containers and (when a kubeconfig or in-cluster service account is present) Kubernetes resources without any config file.
+
+For services that live outside Docker/Kubernetes (remote databases, managed cloud services), mount a config file — see [Configuration](#configuration).
+
+---
+
+## Pre-built binary
+
+Single self-contained binary — UI is embedded.
 
 ```bash
-# Install dependencies
-cd webui
-npm install
-
-# Start dev server
-npm run dev
+# Linux amd64
+curl -sL https://github.com/guilherme-grimm/graph-go/releases/latest/download/graph-go_linux_amd64.tar.gz | tar xz
+./graph-go
 ```
 
-The frontend dev server will start on `http://localhost:5173`.
+Open **http://localhost:8080**. Other platforms on the [Releases page](https://github.com/guilherme-grimm/graph-go/releases).
 
-### Using Make
+---
 
-```bash
-make install       # Install all dependencies
-make dev          # Run backend + frontend concurrently
-make build        # Build production binaries
-make test         # Run all tests
-```
+## Ports
+
+| Port | Purpose |
+|---|---|
+| `8080` | graph-go (UI + API + WebSocket — production) |
+| `5173` | Vite dev server (development only — see [CONTRIBUTING.md](CONTRIBUTING.md)) |
+| `9001` | MinIO console (demo stack only) |
 
 ---
 
 ## Configuration
 
-**Auto-discovery is the preferred way to use graph-go.** Mount the Docker socket and/or run inside a Kubernetes cluster, and graph-go will automatically detect your infrastructure — no configuration needed. Both discoverers activate via auto-detection and run in parallel.
+Auto-discovery is the path. Mount the Docker socket and/or run inside a Kubernetes cluster — graph-go discovers your infrastructure with **no config file needed**.
 
-The YAML config file (`conf/config.yaml`) is only needed for services that aren't reachable via Docker or Kubernetes, such as remote databases, managed cloud services, or external endpoints. When both are used, graph-go merges discovered services with the config file.
+Use the YAML config (`conf/config.yaml`) only as an escape hatch for services that aren't reachable via discovery — remote databases, managed cloud services, external endpoints. See [`conf/config.sample.yaml`](conf/config.sample.yaml) for the full schema and examples for every adapter.
 
-See `conf/config.sample.yaml` for examples.
+To use a config file with the Docker run above:
 
-### Kubernetes Discovery
-
-Kubernetes discovery activates automatically when it detects an in-cluster service account or a `~/.kube/config`. Override with:
-
-```yaml
-kubernetes:
-  enabled: true          # nil = auto-detect
-  kubeconfig: ""         # path override; empty = default lookup
-  context: ""            # empty = current context
-  namespaces: []         # empty = all namespaces
+```bash
+docker run -d -p 8080:8080 \
+  -v /var/run/docker.sock:/var/run/docker.sock:ro \
+  -v $(pwd)/conf/config.yaml:/app/conf/config.yaml:ro \
+  ghcr.io/guilherme-grimm/graph-go:latest
 ```
 
-### Docker Discovery
-
-```yaml
-docker:
-  enabled: true          # nil = auto-detect
-  socket: "/var/run/docker.sock"
-  network: ""            # limit to specific Docker network
-  ignore_images: []      # images to skip during classification
-```
-
-### PostgreSQL Adapter
-
-```yaml
-connections:
-  - name: postgres
-    type: postgres
-    dsn: "postgres://user:password@localhost:5432/mydb?sslmode=disable"
-```
-
-### MongoDB Adapter
-
-```yaml
-connections:
-  - name: mongodb
-    type: mongodb
-    uri: "mongodb://user:password@localhost:27017"
-```
-
-### S3 / AWS Adapter
-
-```yaml
-connections:
-  - name: s3
-    type: s3
-    region: us-east-1
-    access_key_id: "YOUR_ACCESS_KEY"
-    secret_access_key: "YOUR_SECRET_KEY"
-```
-
-### MinIO / S3-Compatible Adapter
-
-```yaml
-connections:
-  - name: minio
-    type: s3
-    region: us-east-1
-    endpoint: "http://localhost:9000"
-    access_key_id: minioadmin
-    secret_access_key: minioadmin
-```
-
-### MySQL Adapter
-
-```yaml
-connections:
-  - name: mysql
-    type: mysql
-    dsn: "root:password@tcp(localhost:3306)/mydb"
-```
-
-### Redis Adapter
-
-```yaml
-connections:
-  - name: redis
-    type: redis
-    uri: "redis://localhost:6379"
-```
-
-Or with host/port (useful for Docker discovery):
-
-```yaml
-connections:
-  - name: redis
-    type: redis
-    host: localhost
-    port: 6379
-    password: ""
-```
-
-### Elasticsearch Adapter
-
-```yaml
-connections:
-  - name: elasticsearch
-    type: elasticsearch
-    endpoint: "http://localhost:9200"
-    username: elastic
-    password: changeme
-```
-
-**Important:** This tool is intended for authorized infrastructure visualization and monitoring of systems you own or have permission to access. Do not use it to scan or access systems without authorization.
+> **Authorized use only:** graph-go is for visualizing infrastructure you own or have permission to access. Do not point it at systems without authorization.
 
 ---
 
@@ -552,7 +395,7 @@ The project uses GitHub Actions for continuous integration and automated release
 - **CI** runs on every push/PR to `main` — backend unit tests, integration tests (testcontainers), and frontend build
 - **Releases** are triggered by version tags (`v*`) and produce:
   - Cross-platform binaries (Linux, macOS, Windows) via [GoReleaser](https://goreleaser.com)
-  - Docker images pushed to `ghcr.io/guilherme-grimm/graph-go-backend` and `-frontend`
+  - Single Docker image pushed to `ghcr.io/guilherme-grimm/graph-go`
 
 To create a release:
 ```bash
