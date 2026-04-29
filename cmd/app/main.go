@@ -50,9 +50,11 @@ func newRootCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVarP(&configPath, "config", "c", defaultConfigPath(), "path to config file (optional — auto-discovery by default)")
-	cmd.Flags().StringVar(&logLevel, "log-level", envOr("LOG_LEVEL", "info"), "log level: debug|info|warn|error")
-	cmd.Flags().StringVar(&logFormat, "log-format", envOr("LOG_FORMAT", "console"), "log format: console|json")
+	// Persistent: inherited by every subcommand so the surface stays uniform.
+	cmd.PersistentFlags().StringVarP(&configPath, "config", "c", defaultConfigPath(), "path to config file (optional — auto-discovery by default)")
+	cmd.PersistentFlags().StringVar(&logLevel, "log-level", envOr("LOG_LEVEL", "info"), "log level: debug|info|warn|error")
+	cmd.PersistentFlags().StringVar(&logFormat, "log-format", envOr("LOG_FORMAT", "console"), "log format: console|json")
+	// Local: --health-check is a Docker HEALTHCHECK shim, not a user surface.
 	cmd.Flags().BoolVar(&healthCheck, "health-check", false, "hit the local /health endpoint and exit 0/1 (for Docker HEALTHCHECK)")
 
 	return cmd
