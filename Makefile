@@ -1,8 +1,11 @@
 .PHONY: help install install-backend install-frontend \
 	dev run-backend run-frontend watch-backend \
-	build build-backend build-frontend \
+	build build-backend build-backend-only build-frontend \
 	test test-backend test-frontend lint clean \
 	docker-build docker-up docker-down docker-logs docker-clean
+
+COMPOSE_FILE := docker-compose.demo.yml
+COMPOSE := docker compose -f $(COMPOSE_FILE)
 
 .DEFAULT_GOAL := help
 
@@ -58,20 +61,31 @@ run-frontend:
 	@echo "Starting frontend dev server on port 5173..."
 	@cd webui && npm run dev
 
-## build: Build both backend and frontend for production
-build: build-backend build-frontend
+## build: Build the single self-contained binary (frontend bundle embedded)
+build: build-backend
 
-## build-backend: Build the backend binary
-build-backend:
+## build-backend: Build the backend binary with the SPA bundle embedded
+build-backend: build-frontend
 	@echo "Building backend..."
 	@go build -o bin/graph-go ./cmd/app/main.go
 	@echo "Backend binary created at: bin/graph-go"
 
-## build-frontend: Build the frontend for production
+## build-backend-only: Build backend without rebuilding the frontend (fast iteration)
+build-backend-only:
+	@echo "Building backend (skipping frontend bundle)..."
+	@go build -o bin/graph-go ./cmd/app/main.go
+	@echo "Backend binary created at: bin/graph-go"
+
+## build-frontend: Build the frontend bundle and stage it for embed
 build-frontend:
 	@echo "Building frontend..."
 	@cd webui && npm run build
-	@echo "Frontend build created at: webui/dist"
+	@echo "Staging bundle into internal/webui/dist/ for embed..."
+	@rm -rf internal/webui/dist
+	@mkdir -p internal/webui/dist
+	@cp -R webui/dist/. internal/webui/dist/
+	@touch internal/webui/dist/.gitkeep
+	@echo "Frontend bundle staged at: internal/webui/dist"
 
 ## test: Run all tests (backend + frontend)
 test: test-backend test-frontend
@@ -97,34 +111,35 @@ clean:
 	@rm -rf bin/
 	@rm -rf tmp/
 	@rm -rf webui/dist/
+	@rm -rf internal/webui/dist/*
+	@touch internal/webui/dist/.gitkeep
 	@rm -rf webui/node_modules/
 	@echo "✓ Clean complete"
 
-## docker-build: Build Docker images
+## docker-build: Build the demo stack image
 docker-build:
-	docker compose build
+	$(COMPOSE) build
 
-## docker-up: Start all services with Docker Compose
+## docker-up: Start the seeded demo stack
 docker-up:
 	@if [ ! -f conf/config.yaml ]; then \
 		echo "conf/config.yaml not found, copying from config.docker.yaml..."; \
 		cp conf/config.docker.yaml conf/config.yaml; \
 	fi
-	docker compose up -d
+	$(COMPOSE) up -d
 	@echo ""
-	@echo "Services started:"
-	@echo "  Frontend:      http://localhost:3000"
-	@echo "  Backend API:   http://localhost:8080"
+	@echo "Demo stack started:"
+	@echo "  graph-go:      http://localhost:8080"
 	@echo "  MinIO Console: http://localhost:9001"
 
-## docker-down: Stop all services
+## docker-down: Stop the demo stack
 docker-down:
-	docker compose down
+	$(COMPOSE) down
 
-## docker-logs: Follow logs from all services
+## docker-logs: Follow logs from the demo stack
 docker-logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
-## docker-clean: Stop services and remove volumes and local images
+## docker-clean: Stop the demo stack and remove volumes and local images
 docker-clean:
-	docker compose down -v --rmi local
+	$(COMPOSE) down -v --rmi local

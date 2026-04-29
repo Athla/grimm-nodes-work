@@ -1,8 +1,7 @@
 services:
-  backend:
+  graph-go:
     build:
       context: .
-      target: backend
     ports:
       - "8080:8080"
     volumes:
@@ -28,19 +27,6 @@ services:
         condition: service_healthy
       media-service:
         condition: service_healthy
-    networks:
-      - graph-info
-
-  frontend:
-    build:
-      context: .
-      target: frontend
-    ports:
-      - "3000:80"
-    labels:
-      graphinfo.ignore: "true"
-    depends_on:
-      - backend
     networks:
       - graph-info
 
@@ -170,12 +156,11 @@ services:
       - graph-info
 
   # ── Discovery-only backend (no config.yaml) ──────────────────────────
-  # Usage: docker compose --profile discovery up
-  backend-discovery:
+  # Usage: docker compose -f docker-compose.demo.yml --profile discovery up
+  graph-go-discovery:
     profiles: ["discovery"]
     build:
       context: .
-      target: backend
     ports:
       - "8081:8080"
     volumes:
