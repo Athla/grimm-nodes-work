@@ -71,10 +71,22 @@ Single self-contained binary — UI is embedded.
 ```bash
 # Linux amd64
 curl -sL https://github.com/guilherme-grimm/graph-go/releases/latest/download/graph-go_linux_amd64.tar.gz | tar xz
-./graph-go
+./graph-go serve   # or just `./graph-go` — same thing
 ```
 
 Open **http://localhost:8080**. Other platforms on the [Releases page](https://github.com/guilherme-grimm/graph-go/releases).
+
+---
+
+## Commands
+
+| Command | What it does |
+|---|---|
+| `graph-go serve` | Start the HTTP server with auto-discovery and live updates (default — same as running with no args). |
+| `graph-go scan` | Run discovery once and emit the graph as JSON to stdout. Useful for piping into `jq`, CI checks, or one-shot exports. |
+| `graph-go version` | Print version, commit, and build date. |
+
+Global flags (apply to every subcommand): `--config`, `--log-level`, `--log-format`. See `graph-go <command> --help` for the full per-command surface.
 
 ---
 
