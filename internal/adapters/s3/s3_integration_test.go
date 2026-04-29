@@ -1,6 +1,6 @@
 //go:build integration
 
-package s3
+package s3_test
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
+	s3adapter "github.com/guilherme-grimm/graph-go/internal/adapters/s3"
 )
 
 var (
@@ -92,7 +93,7 @@ func TestMain(m *testing.M) {
 		"secret_access_key": "minioadmin",
 		"endpoint":          "http://" + endpoint,
 	}
-	testAdapter = New(zap.NewNop().Sugar())
+	testAdapter = s3adapter.New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)
@@ -105,7 +106,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestContract(t *testing.T) {
-	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return New() }, testConfig, adaptertest.ContractOpts{
+	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return s3adapter.New(zap.NewNop().Sugar()) }, testConfig, adaptertest.ContractOpts{
 		MinNodes:           4, // 2 buckets + 2 prefixes
 		MinEdges:           2, // 2 contains (prefixes in test-bucket-1)
 		RootNodeType:       "bucket",

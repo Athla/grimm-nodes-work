@@ -1,6 +1,6 @@
 //go:build integration
 
-package mysql
+package mysql_test
 
 import (
 	"context"
@@ -12,11 +12,12 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/testcontainers/testcontainers-go/modules/mysql"
+	tcmysql "github.com/testcontainers/testcontainers-go/modules/mysql"
 	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
+	mysqladapter "github.com/guilherme-grimm/graph-go/internal/adapters/mysql"
 )
 
 var (
@@ -28,10 +29,10 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	container, err := mysql.Run(ctx, "mysql:8.0",
-		mysql.WithDatabase("testdb"),
-		mysql.WithUsername("root"),
-		mysql.WithPassword("testpass"),
+	container, err := tcmysql.Run(ctx, "mysql:8.0",
+		tcmysql.WithDatabase("testdb"),
+		tcmysql.WithUsername("root"),
+		tcmysql.WithPassword("testpass"),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start mysql container: %v\n", err)
@@ -87,7 +88,7 @@ func TestMain(m *testing.M) {
 
 	// Connect the adapter under test
 	testConfig = adapters.ConnectionConfig{"dsn": dsn}
-	testAdapter = New(zap.NewNop().Sugar())
+	testAdapter = mysqladapter.New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)
@@ -100,7 +101,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestContract(t *testing.T) {
-	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return New() }, testConfig, adaptertest.ContractOpts{
+	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return mysqladapter.New(zap.NewNop().Sugar()) }, testConfig, adaptertest.ContractOpts{
 		MinNodes:       4, // 1 root + 3 tables
 		MinEdges:       2, // 2 FK edges
 		RootNodeType:   "database",

@@ -1,6 +1,6 @@
 //go:build integration
 
-package postgres
+package postgres_test
 
 import (
 	"context"
@@ -11,11 +11,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
+	postgresadapter "github.com/guilherme-grimm/graph-go/internal/adapters/postgres"
 )
 
 var (
@@ -27,11 +28,11 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	container, err := postgres.Run(ctx, "postgres:17-alpine",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("testuser"),
-		postgres.WithPassword("testpass"),
-		postgres.BasicWaitStrategies(),
+	container, err := tcpostgres.Run(ctx, "postgres:17-alpine",
+		tcpostgres.WithDatabase("testdb"),
+		tcpostgres.WithUsername("testuser"),
+		tcpostgres.WithPassword("testpass"),
+		tcpostgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start postgres container: %v\n", err)
@@ -78,7 +79,7 @@ func TestMain(m *testing.M) {
 
 	// Connect the adapter under test
 	testConfig = adapters.ConnectionConfig{"dsn": dsn}
-	testAdapter = New(zap.NewNop().Sugar())
+	testAdapter = postgresadapter.New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)
@@ -91,7 +92,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestContract(t *testing.T) {
-	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return New() }, testConfig, adaptertest.ContractOpts{
+	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return postgresadapter.New(zap.NewNop().Sugar()) }, testConfig, adaptertest.ContractOpts{
 		MinNodes:       4, // 1 root + 3 tables
 		MinEdges:       2, // 2 FK edges
 		RootNodeType:   "database",

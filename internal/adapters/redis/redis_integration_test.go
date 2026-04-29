@@ -1,6 +1,6 @@
 //go:build integration
 
-package redis
+package redis_test
 
 import (
 	"context"
@@ -10,11 +10,12 @@ import (
 	"time"
 
 	goredis "github.com/redis/go-redis/v9"
-	"github.com/testcontainers/testcontainers-go/modules/redis"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"go.uber.org/zap"
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
+	redisadapter "github.com/guilherme-grimm/graph-go/internal/adapters/redis"
 )
 
 var (
@@ -26,7 +27,7 @@ func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	container, err := redis.Run(ctx, "redis:7-alpine")
+	container, err := tcredis.Run(ctx, "redis:7-alpine")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to start redis container: %v\n", err)
 		os.Exit(1)
@@ -72,7 +73,7 @@ func TestMain(m *testing.M) {
 		"port": uint16(port.Int()),
 	}
 
-	testAdapter = New(zap.NewNop().Sugar())
+	testAdapter = redisadapter.New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)
@@ -85,7 +86,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestContract(t *testing.T) {
-	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return New() }, testConfig, adaptertest.ContractOpts{
+	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return redisadapter.New(zap.NewNop().Sugar()) }, testConfig, adaptertest.ContractOpts{
 		MinNodes:       3, // 1 root + 2 keyspaces
 		MinEdges:       2, // 2 contains
 		RootNodeType:   "database",
@@ -105,7 +106,7 @@ func TestConnect_URI(t *testing.T) {
 	port, _ := testConfig["port"].(uint16)
 	uri := fmt.Sprintf("redis://%s:%d", host, port)
 
-	a := New(zap.NewNop().Sugar())
+	a := redisadapter.New(zap.NewNop().Sugar())
 	if err := a.Connect(adapters.ConnectionConfig{"uri": uri}); err != nil {
 		t.Fatalf("Connect with URI failed: %v", err)
 	}

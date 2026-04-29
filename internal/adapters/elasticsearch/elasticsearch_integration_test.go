@@ -1,6 +1,6 @@
 //go:build integration
 
-package elasticsearch
+package elasticsearch_test
 
 import (
 	"context"
@@ -17,6 +17,7 @@ import (
 
 	"github.com/guilherme-grimm/graph-go/internal/adapters"
 	"github.com/guilherme-grimm/graph-go/internal/adapters/adaptertest"
+	elasticsearchadapter "github.com/guilherme-grimm/graph-go/internal/adapters/elasticsearch"
 )
 
 var (
@@ -79,7 +80,7 @@ func TestMain(m *testing.M) {
 
 	// Connect the adapter under test
 	testConfig = adapters.ConnectionConfig{"endpoint": endpoint}
-	testAdapter = New(zap.NewNop().Sugar())
+	testAdapter = elasticsearchadapter.New(zap.NewNop().Sugar())
 	if err := testAdapter.Connect(testConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect adapter: %v\n", err)
 		os.Exit(1)
@@ -92,7 +93,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestContract(t *testing.T) {
-	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return New() }, testConfig, adaptertest.ContractOpts{
+	adaptertest.RunContractTests(t, testAdapter, func() adapters.Adapter { return elasticsearchadapter.New(zap.NewNop().Sugar()) }, testConfig, adaptertest.ContractOpts{
 		MinNodes:       4, // 1 root + 3 indices
 		MinEdges:       3, // 3 contains
 		RootNodeType:   "elasticsearch",
